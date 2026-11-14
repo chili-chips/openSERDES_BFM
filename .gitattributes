@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 CHILI.CHIPS.LLC
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+*.sv    linguist-language=SystemVerilog
+*.svh   linguist-language=SystemVerilog
+*.vh    linguist-language=SystemVerilog
+
+# LF in the working copy too, whatever core.autocrlf says
+*.sv      text eol=lf
+*.svh     text eol=lf
+*.vh      text eol=lf
+*.vlt     text eol=lf
+*.sh      text eol=lf
+*.md      text eol=lf
+*.toml    text eol=lf
+Makefile* text eol=lf

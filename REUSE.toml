@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 CHILI.CHIPS.LLC
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# When several annotations match a file, the LAST one in this file wins.
+#   precedence = "closest"  -> a file's own SPDX header wins; this is the fallback
+
+version = 1
+
+# Our own files: the BFMs, their tests and docs. A file's own SPDX header wins.
+[[annotations]]
+path = ["**"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 CHILI.CHIPS.LLC"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+# Third-party logos, shown for acknowledgment only (NOT open-licensed)
+[[annotations]]
+path = ["doc/artwork/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "Respective owners"
+SPDX-License-Identifier = "LicenseRef-Third-Party-Document"

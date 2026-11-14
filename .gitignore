@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 CHILI.CHIPS.LLC
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Editing
+*~
+*.bak
+*.swp
+
+# Build and run outputs (make in 1.gatemate/)
+obj_*/
+obj_*.vvp
+modes_*.txt
+sim_*.log
+*.log
+*.jou
+*.pb
+*.wdb
+xsim.dir/
+.Xil/
+
+# Waveforms
+*.vcd
+*.fst
+*.vvp
