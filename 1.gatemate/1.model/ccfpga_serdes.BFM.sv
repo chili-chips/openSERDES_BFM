@@ -1200,7 +1200,8 @@ module ccfpga_serdes
 
   // CDR_MODEL = NONE: this BFM's ID, and its peer's, the TX at the far end
   // of the RX pins. Both are set once, at the start (enumeration), and
-  // survive every reset.
+  // survive every reset. One variable, so no type of its own.
+  // verilog_lint: waive typedef-structs-unions
   struct packed {
     int my_id;
     int peer_id;

@@ -926,6 +926,14 @@ module tb_rules #(
     $finish;
   end
 
+`ifdef WAVES
+  // make waves: the waveform for WaveCrux, tb_rules.fst
+  initial begin
+    $dumpfile("tb_rules.fst");
+    $dumpvars(0, tb_rules);
+  end
+`endif
+
 endmodule : tb_rules
 
 // -----------------------------------------------------------------------------

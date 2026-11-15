@@ -1,0 +1,250 @@
+{
+  "version": 4,
+  "sourceFilePath": "work/waves/verilator.tb_modes.fst",
+  "signals": [
+    {
+      "kind": "signal",
+      "id": "bfm-0",
+      "ref": "18",
+      "path": "tb_modes.clk_ref",
+      "name": "clk_ref",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-1",
+      "ref": "20",
+      "path": "tb_modes.arst_n",
+      "name": "arst_n",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-2",
+      "ref": "23",
+      "path": "tb_modes.rst_core_n",
+      "name": "rst_core_n",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-3",
+      "ref": "146",
+      "path": "tb_modes.u_serdes.pll_locked",
+      "name": "pll_locked",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-4",
+      "ref": "41",
+      "path": "tb_modes.tx_ready",
+      "name": "tx_ready",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-5",
+      "ref": "21",
+      "path": "tb_modes.clk_tx",
+      "name": "clk_tx",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-6",
+      "ref": "34",
+      "path": "tb_modes.tx_d",
+      "name": "tx_d",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-7",
+      "ref": "36",
+      "path": "tb_modes.tx_k",
+      "name": "tx_k",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-8",
+      "ref": "44",
+      "path": "tb_modes.tx_err",
+      "name": "tx_err",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-9",
+      "ref": "24",
+      "path": "tb_modes.txp",
+      "name": "txp",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-10",
+      "ref": "24",
+      "path": "tb_modes.rxp",
+      "name": "rxp",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-11",
+      "ref": "164",
+      "path": "tb_modes.u_serdes.rx_cdr_locked",
+      "name": "rx_cdr_locked",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-12",
+      "ref": "22",
+      "path": "tb_modes.clk_rx",
+      "name": "clk_rx",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-13",
+      "ref": "35",
+      "path": "tb_modes.rx_d",
+      "name": "rx_d",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-14",
+      "ref": "37",
+      "path": "tb_modes.rx_k",
+      "name": "rx_k",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-15",
+      "ref": "43",
+      "path": "tb_modes.rx_aligned",
+      "name": "rx_aligned",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-16",
+      "ref": "38",
+      "path": "tb_modes.rx_nit",
+      "name": "rx_nit",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-17",
+      "ref": "39",
+      "path": "tb_modes.rx_disp",
+      "name": "rx_disp",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-18",
+      "ref": "45",
+      "path": "tb_modes.rx_err",
+      "name": "rx_err",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-19",
+      "ref": "46",
+      "path": "tb_modes.prbs_err",
+      "name": "prbs_err",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-20",
+      "ref": "42",
+      "path": "tb_modes.rx_ready",
+      "name": "rx_ready",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    }
+  ],
+  "cursor": {
+    "primary": null,
+    "secondary": null
+  },
+  "markers": {},
+  "view": {
+    "ticksPerPixel": 453463.0,
+    "panOffsetTicks": 0.0,
+    "scrollOffset": 0.0
+  },
+  "panels": {
+    "signalTree": false,
+    "valueColumn": false,
+    "transactionView": false,
+    "stageView": false,
+    "statisticsStrip": false,
+    "cocotbLogPanel": false,
+    "rtlSource": false,
+    "sizes": {
+      "left": 301.6,
+      "right": 150.0
+    }
+  },
+  "signalTreeState": {
+    "expanded": [],
+    "selected": [],
+    "scroll": 0.0
+  },
+  "translateFilters": {},
+  "stage": {
+    "panels": []
+  },
+  "activeTheme": "wavecrux-dark",
+  "decoders": []
+}

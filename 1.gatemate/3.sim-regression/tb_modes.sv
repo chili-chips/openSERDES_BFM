@@ -350,6 +350,8 @@ module tb_modes #(
   initial begin : _lut
     bit [10:0] e;
     #1;
+    // +nolut is a flag with no value: $test$plusargs is the call for it
+    // verilog_lint: waive plusarg-assignment
     for (int s = 0; s < 1024 && !$test$plusargs("nolut"); s++) begin
       if (u_serdes.dec_lut[s] != ccfpga_serdes_pkg::dec8b10b(s[9:0])) begin
         lut_bad++;
@@ -515,6 +517,14 @@ module tb_modes #(
              stops, (errors == 0) ? "PASS" : "FAIL");
     $finish;
   end
+
+`ifdef WAVES
+  // make waves: the waveform for WaveCrux, tb_modes.fst
+  initial begin
+    $dumpfile("tb_modes.fst");
+    $dumpvars(0, tb_modes);
+  end
+`endif
 
 endmodule : tb_modes
 

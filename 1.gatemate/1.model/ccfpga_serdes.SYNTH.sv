@@ -173,7 +173,7 @@ module ccfpga_serdes #(
     parameter logic [ 0:0] PLL_BISC_CAL_AUTO        = 1,
     parameter logic [ 4:0] PLL_BISC_DLY_PFD_MON_REF = 0,
     parameter logic [ 4:0] PLL_BISC_DLY_PFD_MON_DIV = 2,
-    parameter logic [ 2:0] PLL_BISC_COR_DLY         = 1 
+    parameter logic [ 2:0] PLL_BISC_COR_DLY         = 1
 ) (
     input  logic        clk_ref_i,
     input  logic        clk_reg_i,

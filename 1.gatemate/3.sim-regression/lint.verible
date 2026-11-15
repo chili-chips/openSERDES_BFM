@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Chili.CHIPS
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Verible lint rules for make lint, --rules_config: Verible's defaults, but
+# - parameters and localparams: ALL_CAPS, as the CC_SERDES ports and
+#   registers are named (RX_BUF_CFG_ADDR, PLL_CFG0_ADDR), or CamelCase
+# - no line limit: port lists, register tables and report formats run past
+#   100 columns, and the files are not run through verible-verilog-format
+# - tasks and functions in a module are static by default (IEEE 1800-2023
+#   13.3.1); writing "static" adds nothing
+parameter-name-style=parameter_style:ALL_CAPS|CamelCase;localparam_style:ALL_CAPS|CamelCase
+-line-length
+-explicit-task-lifetime
+-explicit-function-lifetime

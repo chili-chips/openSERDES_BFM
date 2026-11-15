@@ -1,0 +1,290 @@
+{
+  "version": 4,
+  "sourceFilePath": "work/waves/verilator.tb_rules.fst",
+  "signals": [
+    {
+      "kind": "signal",
+      "id": "bfm-0",
+      "ref": "17",
+      "path": "tb_rules.clk_ref",
+      "name": "clk_ref",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-1",
+      "ref": "19",
+      "path": "tb_rules.arst_n",
+      "name": "arst_n",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-2",
+      "ref": "24",
+      "path": "tb_rules.tx_rst",
+      "name": "tx_rst",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-3",
+      "ref": "26",
+      "path": "tb_rules.rx_rst",
+      "name": "rx_rst",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-4",
+      "ref": "28",
+      "path": "tb_rules.rx_pcs",
+      "name": "rx_pcs",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-5",
+      "ref": "31",
+      "path": "tb_rules.txpd",
+      "name": "txpd",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-6",
+      "ref": "32",
+      "path": "tb_rules.rxpd",
+      "name": "rxpd",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-7",
+      "ref": "196",
+      "path": "tb_rules.u_serdes.pll_locked",
+      "name": "pll_locked",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-8",
+      "ref": "54",
+      "path": "tb_rules.txdone",
+      "name": "txdone",
+      "color": 4294962776,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-9",
+      "ref": "66",
+      "path": "tb_rules.txd",
+      "name": "txd",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-10",
+      "ref": "67",
+      "path": "tb_rules.txk",
+      "name": "txk",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-11",
+      "ref": "56",
+      "path": "tb_rules.tx_err",
+      "name": "tx_err",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-12",
+      "ref": "33",
+      "path": "tb_rules.tx_ei",
+      "name": "tx_ei",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-13",
+      "ref": "52",
+      "path": "tb_rules.txp",
+      "name": "txp",
+      "color": 4294948685,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-14",
+      "ref": "76",
+      "path": "tb_rules.cut",
+      "name": "cut",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-15",
+      "ref": "77",
+      "path": "tb_rules.rxp",
+      "name": "rxp",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-16",
+      "ref": "214",
+      "path": "tb_rules.u_serdes.rx_cdr_locked",
+      "name": "rx_cdr_locked",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-17",
+      "ref": "49",
+      "path": "tb_rules.clk_rxo",
+      "name": "clk_rxo",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-18",
+      "ref": "61",
+      "path": "tb_rules.rxd",
+      "name": "rxd",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-19",
+      "ref": "62",
+      "path": "tb_rules.rxk",
+      "name": "rxk",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-20",
+      "ref": "57",
+      "path": "tb_rules.aligned",
+      "name": "aligned",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-21",
+      "ref": "58",
+      "path": "tb_rules.realign",
+      "name": "realign",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-22",
+      "ref": "59",
+      "path": "tb_rules.prbs_err",
+      "name": "prbs_err",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-23",
+      "ref": "60",
+      "path": "tb_rules.ei_o",
+      "name": "ei_o",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    },
+    {
+      "kind": "signal",
+      "id": "bfm-24",
+      "ref": "55",
+      "path": "tb_rules.rxdone",
+      "name": "rxdone",
+      "color": 4283417591,
+      "format": "hexadecimal",
+      "height": 30.0
+    }
+  ],
+  "cursor": {
+    "primary": null,
+    "secondary": null
+  },
+  "markers": {},
+  "view": {
+    "ticksPerPixel": 1178096.0,
+    "panOffsetTicks": 0.0,
+    "scrollOffset": 0.0
+  },
+  "panels": {
+    "signalTree": false,
+    "valueColumn": false,
+    "transactionView": false,
+    "stageView": false,
+    "statisticsStrip": false,
+    "cocotbLogPanel": false,
+    "rtlSource": false,
+    "sizes": {
+      "left": 301.6,
+      "right": 150.0
+    }
+  },
+  "signalTreeState": {
+    "expanded": [],
+    "selected": [],
+    "scroll": 0.0
+  },
+  "translateFilters": {},
+  "stage": {
+    "panels": []
+  },
+  "activeTheme": "wavecrux-dark",
+  "decoders": []
+}

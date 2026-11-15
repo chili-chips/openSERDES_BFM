@@ -55,6 +55,8 @@ make formal       # 8b/10b proofs: Yosys (read_slang) and Icarus
 make              # sim_modes, sim_icarus, formal
 make sanity       # the sanity list
 make regression   # the regression list
+make waves        # the waveforms for WaveCrux (below)
+make lint         # Verible on the BFM and the test benches (lint.verible)
 make clean        # removes work/
 ```
 
@@ -73,6 +75,12 @@ Results (WSL2 Ubuntu 24.04, wall clock with the build; 🟢 passes, 🟠 partly,
 | 🟢 Vivado XSIM 2026.1 | PASS, 64 bits, each `CDR_MODEL` | PASS, 6 of 6 runs; the BFM works around an XSIM engine crash ([AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model)) | about 4 s build, 4 s run, each |
 | 🔴 JanusHDL 0.17.0 | no: does not elaborate (`tb_modes.sv:294`, a bit-select of a `real` array) | no: stops at time 0 (`ccfpga_serdes.BFM.sv:438`, a select of a select as a target, not supported at run time yet) | |
 | 🟢 Yosys 0.70 + Icarus (`make formal`) | 8b/10b: 6 of 6 proved | | 19 s |
+
+### Waveforms
+
+`make waves` runs `tb_modes` (64 bits, `ACCURATE`) and `tb_rules` (64 bits, `FAST`) once each, dumped whole, and writes `work/waves/verilator.tb_modes.fst`, `verilator.tb_rules.fst` and a [WaveCrux](https://wavecrux.app) session for each (`.wavecrux`, File > Open). `WAVES_SIM=icarus` does the same on Icarus. Rows: clocks, resets and PLL lock (yellow), TX data, K flags and line (orange), RX line, CDR lock, recovered clock, data and 8b/10b and alignment flags (blue).
+
+A session binds by signal number, which differs between simulators, so each FST gets its own (`wavecrux-session.py`). `tb_modes.wavecrux` and `tb_rules.wavecrux` next to the Makefile are for the Verilator dumps. Needs `fst2vcd` (GTKWave).
 
 ### How to use it in your project
 
@@ -156,7 +164,7 @@ All SerDes models are **`purposely designed to run on open-source and/or free si
 - **Formal**: [Yosys](https://github.com/YosysHQ/yosys)
   - SystemVerilog front-end: [yosys-slang](https://github.com/povik/yosys-slang)
 - **Waveforms, Protocol Decoders, Checkers**: [WaveCrux](https://wavecrux.app)
-- **Neat Formatting**: [Verible](https://github.com/chipsalliance/verible)
+- **Neat Formatting, Lint**: [Verible](https://github.com/chipsalliance/verible), `make lint` in `1.gatemate/3.sim-regression`
 
 ---
 ## GenAI

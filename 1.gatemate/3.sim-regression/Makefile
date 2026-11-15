@@ -15,6 +15,10 @@
 #   make sim_xsim    Vivado XSIM: tb_modes at 64 bits, each CDR_MODEL; then tb_rules
 #   make sim_janushdl  JanusHDL (jhdl): the same runs as sim_xsim
 #   make formal     the 8b/10b proofs (../2.formal/run-formal.sh)
+#   make waves       the waveforms for WaveCrux: tb_modes (64 bits, ACCURATE) and tb_rules
+#                    (64 bits, FAST), each an FST and its session in work/waves/
+#                    (wavecrux-session.py); WAVES_SIM=verilator (default) or icarus
+#   make lint        Verible on the BFM and the test benches (lint.verible)
 #   make sanity      the sanity list (run-sanity.sh), about 2 minutes
 #   make regression  the regression list (run-regression.sh)
 #   make clean       removes work/
@@ -39,7 +43,7 @@ IW    := $(W)/icarus
 XW    := $(W)/xsim
 LOGS  := $(W)/logs
 
-.PHONY: all sim_modes sim_rules sim_icarus sim_xsim sim_janushdl formal sanity regression clean
+.PHONY: all sim_modes sim_rules sim_icarus sim_xsim sim_janushdl formal waves lint sanity regression clean
 
 all: sim_icarus sim_modes formal
 
@@ -191,6 +195,46 @@ sim_janushdl: | $(LOGS)
 
 formal: | $(LOGS)
 	bash ../2.formal/run-formal.sh | tee $(LOGS)/formal.log
+
+# The waveforms for WaveCrux: one run of each test bench, dumped whole
+# (+define+WAVES), run in work/waves/; then a session for each FST. Its
+# signal numbers differ from one simulator to the next, so the session is
+# made from the FST (wavecrux-session.py)
+WAVES_SIM ?= verilator
+WV        := $(W)/waves
+PYTHON    ?= python3
+
+waves: | $(LOGS)
+	@mkdir -p $(WV)
+	@case $(WAVES_SIM) in \
+	verilator) \
+	  $(MODES_VLT) --trace-fst -GDP_SEL=3 -Mdir $(VW)/waves_modes +define+CDR_MODEL=ACCURATE \
+	    +define+BHV_RX_WORD_PHASE_RANDOM=0 +define+WAVES $(BFM) tb_modes.sv > /dev/null; \
+	  $(RULES_VLT) --trace-fst -GDP=3 -GSLIDE=0 -Mdir $(VW)/waves_rules +define+CDR_MODEL=FAST \
+	    +define+WAVES $(BFM) tb_rules.sv > /dev/null; \
+	  ( cd $(WV) && ../verilator/waves_modes/Vtb_modes +comma=0 | grep "TB_MODES" ); \
+	  ( cd $(WV) && ../verilator/waves_rules/Vtb_rules | $(RULES_GREP) ) ;; \
+	icarus) \
+	  mkdir -p $(IW); \
+	  iverilog -g2012 -DCDR_MODEL=ACCURATE -DWAVES -Ptb_modes.DP_SEL=3 -o $(IW)/waves_modes.vvp $(BFM) tb_modes.sv 2>&1 \
+	    | { grep -v "sorry: Case unique" || true; }; \
+	  iverilog -g2012 -DCDR_MODEL=FAST -DWAVES -Ptb_rules.DP=3 -Ptb_rules.SLIDE=0 -o $(IW)/waves_rules.vvp $(BFM) tb_rules.sv 2>&1 \
+	    | { grep -v "sorry: Case unique" || true; }; \
+	  ( cd $(WV) && vvp -N ../icarus/waves_modes.vvp -fst +model=ACCURATE +comma=0 +nolut | grep "TB_MODES" ); \
+	  ( cd $(WV) && vvp -N ../icarus/waves_rules.vvp -fst | $(RULES_GREP) ) ;; \
+	*) echo "WAVES_SIM must be verilator or icarus (got \"$(WAVES_SIM)\")"; exit 1 ;; \
+	esac
+	@for t in tb_modes tb_rules; do \
+	  mv -f $(WV)/$$t.fst $(WV)/$(WAVES_SIM).$$t.fst; \
+	  $(PYTHON) wavecrux-session.py $$t $(WV)/$(WAVES_SIM).$$t.fst $(WV)/$(WAVES_SIM).$$t.wavecrux; \
+	done
+
+# Verible on the BFM and the test benches (lint.verible: our rule set)
+VERIBLE_LINT ?= verible-verilog-lint
+LINT_SRC     := $(wildcard $(MODEL)/*.sv) tb_modes.sv tb_rules.sv
+
+lint:
+	@$(VERIBLE_LINT) --rules_config=lint.verible $(LINT_SRC) && echo "lint: Verible, $(words $(LINT_SRC)) files, clean"
 
 sanity:
 	@bash run-sanity.sh
