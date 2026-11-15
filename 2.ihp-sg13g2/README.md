@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: 2026 Chili.CHIPS
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# Target 3: IHP SG13G2 SerDes BFM (TODO)
+# Target 2: IHP SG13G2 SerDes BFM (TODO)
 
 [![Status:TODO](https://badgen.net/badge/Status/TODO/red)](../README.md#made-for-portability)
 

@@ -4,7 +4,7 @@ SPDX-FileCopyrightText: 2026 Chili.CHIPS
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# Target 2: GF180MCU SerDes BFM (TODO)
+# Target 3: GF180MCU SerDes BFM (TODO)
 
 [![Status:TODO](https://badgen.net/badge/Status/TODO/red)](../README.md#made-for-portability)
 

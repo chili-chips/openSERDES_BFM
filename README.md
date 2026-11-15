@@ -3,8 +3,8 @@
 [![License:BSD-3](https://badgen.net/badge/License/BSD-3/blue)](LICENSES)
 [![REUSE:Compliant](https://badgen.net/badge/REUSE/Compliant/green)](REUSE.toml)
 [![GateMate:Pass](https://badgen.net/badge/GateMate/Pass/green)](1.gatemate)
-[![GF180MCU:TODO](https://badgen.net/badge/GF180MCU/TODO/red)](2.gf180mcu)
-[![IHP-SG13G2:TODO](https://badgen.net/badge/IHP%20SG13G2/TODO/red)](3.ihp-sg13g2)
+[![IHP-SG13G2:TODO](https://badgen.net/badge/IHP%20SG13G2/TODO/red)](2.ihp-sg13g2)
+[![GF180MCU:TODO](https://badgen.net/badge/GF180MCU/TODO/red)](3.gf180mcu)
 [![Verilator:Pass](https://badgen.net/badge/Verilator/Pass/green)](#self-test)
 [![Icarus:Pass](https://badgen.net/badge/Icarus/Pass/green)](#self-test)
 [![XSIM:Pass](https://badgen.net/badge/XSIM/Pass/green)](#self-test)
@@ -26,8 +26,8 @@ Open-source simulation models (bus functional models, BFMs) of SerDes hard macro
 | Target | SerDes | Process / vendor | Status |
 |-----|---|---|---|
 | [1.gatemate](1.gatemate/README.md) | GateMate `CC_SERDES` hard macro, at its `ccfpga_serdes` wrapper level | [Cologne Chip](https://colognechip.com) GateMate FPGA | 🟢 working: Verilator, Icarus, XSIM and the 8b/10b proofs pass; 🔴 JanusHDL ([self-test](#self-test)) |
-| [2.gf180mcu](2.gf180mcu/README.md) | open-source SerDes | 180 nm CMOS, GlobalFoundries [GF180MCU](https://github.com/google/gf180mcu-pdk) | 🔴 TODO: the BFM follows the silicon design |
-| [3.ihp-sg13g2](3.ihp-sg13g2/README.md) | [BRICD](https://www.thebricd.org)'s Open-SERDES | 130 nm SiGe BiCMOS, [IHP](https://www.ihp-microelectronics.com) [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK) | 🔴 TODO: the BFM follows the silicon design |
+| [2.ihp-sg13g2](2.ihp-sg13g2/README.md) | [BRICD](https://www.thebricd.org)'s Open-SERDES | 130 nm SiGe BiCMOS, [IHP](https://www.ihp-microelectronics.com) [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK) | 🔴 TODO: the BFM follows the silicon design |
+| [3.gf180mcu](3.gf180mcu/README.md) | open-source SerDes | 180 nm CMOS, GlobalFoundries [GF180MCU](https://github.com/google/gf180mcu-pdk) | 🔴 TODO: the BFM follows the silicon design |
 
 ---
 ---
@@ -117,22 +117,12 @@ The BFMs are by Chili.CHIPS; this repository is volunteer work. Target 1 was dev
 
 - [Cologne Chip](https://colognechip.com): the [GateMate FPGA](https://colognechip.com/programmable-logic/gatemate/), its datasheet DS1001 (the SerDes, section 2.5) and user guide UG1001
 - [openCologne](https://github.com/chili-chips/openCologne) and [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE): the projects Target 1 came from
+- [ngscopeclient](https://www.ngscopeclient.org): open-source signal analysis for oscilloscopes and logic analyzers, with protocol decoders
 
 
 ---
 ---
-# Target 2: gf180mcu
-
-TODO
-
-#### References
-
-- GlobalFoundries [GF180MCU PDK](https://github.com/google/gf180mcu-pdk)
-- [wafer.space](https://wafer.space)
-  
----
----
-# Target 3: ihp-sg13g2
+# Target 2: ihp-sg13g2
 
 TODO
 
@@ -141,6 +131,32 @@ TODO
 - [BRICD](https://www.thebricd.org)'s Open-SERDES
 - 130nm SiGe BiCMOS [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK)
 - [IHP](https://www.ihp-microelectronics.com)
+
+---
+---
+# Target 3: gf180mcu
+
+TODO
+
+#### References
+
+- GlobalFoundries [GF180MCU PDK](https://github.com/google/gf180mcu-pdk)
+- [wafer.space](https://wafer.space)
+
+
+---
+---
+# Community Outreach
+
+**Issues filed upstream** from this project, open and closed. Details of the open ones: [Self-test](#self-test). The issues from the 7.SerDes work this BFM came from: [openCologne 7.SerDes](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/README.md#community-outreach).
+
+| Tool / project | Issue | What | State |
+|---|---|---|---|
+| Vivado XSIM | [AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model), ours [#1](https://github.com/chili-chips/openSERDES_BFM/issues/1) | 2026.1: "Simulation engine not responding" at an event control in a forked process of the TX reset sequence | open (worked around) |
+| JanusHDL | [openCologne#12](https://github.com/chili-chips/openCologne/issues/12) | 0.17.0: an element of a queue of `realtime` is read as a bit-select (`tb_modes.sv:294`) | open |
+| JanusHDL | [openCologne#13](https://github.com/chili-chips/openCologne/issues/13) | 0.17.0: a run-time write to an element of a packed struct member (`ccfpga_serdes.BFM.sv:438`) | open |
+
+JanusHDL has no public tracker (closed source, so it can read encrypted IP): its issues are in our repos, under the [`JanusHDL` label](https://github.com/issues?q=org%3Achili-chips+label%3AJanusHDL).
 
 
 ---

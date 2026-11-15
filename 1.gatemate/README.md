@@ -124,6 +124,8 @@ The three agree word for word, with latencies within 4 UI of each other (`sim_mo
 
 ## Parameters
 
+Every port and parameter, one by one: [1.model/README.md](1.model/README.md).
+
 The model takes all 115 `ccfpga_serdes` parameters, with their names and defaults, so any instantiation of the vendor model works unchanged, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDES`. It acts on 38. 7 more only set a register value to read back. The other 70 tune what a digital model doesn't have; it accepts them for drop-in compatibility. A value the datasheet doesn't allow (UG1001 Tables 7.12 to 7.14, DS1001 Tables 2.15 to 2.17), or one the model doesn't model, stops the simulation (`$error`, then `$fatal`). So do a bad `PLL_CFG1` or `RX_BUF_CFG` written at run time, when it takes effect. Example: `PLL_OUT_DIVSEL = 2`, n.a. in DS1001 Table 2.15.
 
 **Modelled (34):**
@@ -282,6 +284,8 @@ HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver se
 - RX clock correction: DS1001 does not describe its depth, matching and insert/remove behaviour; what the model does is in [RX buffer and clock correction](#rx-buffer-and-clock-correction).
 
 ## Verification
+
+`make sim_modes` compares each `CDR_MODEL` with `ACCURATE`: data bit-exact, and the latency of every comma within `MODES_TOL_NS` (default 1.6 ns; `make sim_modes MODES_TOL_NS=2`).
 
 | Check | What | Where | Result |
 |---|---|---|---|
