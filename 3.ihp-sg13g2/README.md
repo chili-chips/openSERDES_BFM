@@ -4,9 +4,9 @@ SPDX-FileCopyrightText: 2026 Chili.CHIPS
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# Chapter 3: IHP SG13G2 SerDes BFM (WIP)
+# Target 3: IHP SG13G2 SerDes BFM (TODO)
 
-[![Status:WIP](https://badgen.net/badge/Status/WIP/orange)](../README.md#chapters)
+[![Status:TODO](https://badgen.net/badge/Status/TODO/red)](../README.md#made-for-portability)
 
 An open-source SerDes in **130 nm SiGe BiCMOS**, on [IHP](https://www.ihp-microelectronics.com)'s [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK): [BRICD](https://www.thebricd.org)'s Open-SERDES, with an open channel-to-GDS flow.
 

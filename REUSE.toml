@@ -16,7 +16,14 @@ SPDX-License-Identifier = "BSD-3-Clause"
 
 # Third-party logos, shown for acknowledgment only (NOT open-licensed)
 [[annotations]]
-path = ["doc/artwork/**"]
+path = ["0.doc/artwork/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "Respective owners"
 SPDX-License-Identifier = "LicenseRef-Third-Party-Document"
+
+# our own logo, in 0.doc/artwork with the third-party ones
+[[annotations]]
+path = ["0.doc/artwork/openSERDES_BFM.hex.*"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 CHILI.CHIPS.LLC"
+SPDX-License-Identifier = "BSD-3-Clause"

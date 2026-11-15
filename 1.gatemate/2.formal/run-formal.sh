@@ -8,7 +8,7 @@
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MODEL_DIR="$(cd "${HERE}/.." && pwd)"
+MODEL_DIR="$(cd "${HERE}/../1.model" && pwd)"
 YOSYS=${YOSYS:-yosys}
 
 if command -v cygpath >/dev/null 2>&1; then

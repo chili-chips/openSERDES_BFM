@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
-// The SerDes BFM is a behavioural model, not our RTL; no lint on it
+// The SerDes BFM is a behavioural model, not RTL; no lint on it
+
 `verilator_config
 lint_off -file "*ccfpga_serdes*"
 lint_off -rule ZERODLY -file "*ccfpga_serdes*"

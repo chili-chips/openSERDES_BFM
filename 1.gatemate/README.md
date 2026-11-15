@@ -4,42 +4,47 @@ SPDX-FileCopyrightText: 2026 Chili.CHIPS
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# Chapter 1: GateMate SerDes BFM
+# Target 1: GateMate SerDes BFM
 
-<p align="center">
-  <a href="https://colognechip.com"><img width="30%" alt="Cologne Chip logo" src="../doc/artwork/Cologne-Chip.logo.png"></a>
+<div align="center">
+  <a href="https://colognechip.com"><img width="30%" alt="Cologne Chip logo" src="../0.doc/artwork/Cologne-Chip.logo.png"></a>
   &nbsp;&nbsp;
-  <a href="https://colognechip.com/programmable-logic/gatemate/"><img width="30%" alt="GateMate logo" src="../doc/artwork/GateMate.png"></a>
-</p>
+  <a href="https://colognechip.com/programmable-logic/gatemate/"><img width="30%" alt="GateMate logo" src="../0.doc/artwork/GateMate.png"></a>
+</div>
 
-`ccfpga_serdes.BFM.sv` is an open-source behavioural model of the GateMate SerDes, for simulation. It runs in Verilator and Icarus Verilog, with open tools only.
+`1.model/ccfpga_serdes.BFM.sv` is an open-source behavioural model of the GateMate SerDes, for simulation. It runs in Verilator and Icarus Verilog, with open tools only.
 
 **The SerDes is Cologne Chip's.** The `CC_SERDES` hard macro of the [GateMate FPGA](https://colognechip.com/programmable-logic/gatemate/) is designed by [Cologne Chip](https://colognechip.com). This BFM models it from their datasheet DS1001 and their simulation model. The datasheets are on Cologne Chip's site; they are not part of this repository. The BFM itself is by Chili.CHIPS.
 
 **Level: `ccfpga_serdes`, not `CC_SERDES`.** The model replaces Cologne Chip's simulation model `ccfpga_serdes` (NDA), with its module name, ports and parameters, not the `CC_SERDES` primitive ([the two levels](#ccfpga_serdes-vs-cc_serdes)).
 
-**One instance, chip and simulation.** [`ccfpga_serdes.SYNTH.sv`](ccfpga_serdes.SYNTH.sv) is `ccfpga_serdes` for the chip: `CC_SERDES` behind the same ports and parameters, with `CC_SERDES`'s defaults, names only, no logic. A design instantiates `ccfpga_serdes` once, with no `` `ifdef SYNTHESIS ``: the file list takes `.SYNTH.sv` for synthesis and `.BFM.sv` for simulation.
+**One instance, chip and simulation.** [`1.model/ccfpga_serdes.SYNTH.sv`](1.model/ccfpga_serdes.SYNTH.sv) is `ccfpga_serdes` for the chip: `CC_SERDES` behind the same ports and parameters, with `CC_SERDES`'s defaults, names only, no logic. A design instantiates `ccfpga_serdes` once, with no `` `ifdef SYNTHESIS ``: the file list takes `.SYNTH.sv` for synthesis and `.BFM.sv` for simulation.
 
 It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7.SerDes) and is used by [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE). This folder is the master copy.
 
-**Self-test** (WSL2 Ubuntu 24.04, wall clock with the build; Vivado XSIM and JanusHDL: [top README](../README.md#chapter-1-self-test)):
+**Self-test** (WSL2 Ubuntu 24.04, wall clock with the build; per simulator: [top README](../README.md#self-test)):
 
 | Target | Simulator | Runs | Result |
 |---|---|---|---|
 | `make sim_modes` | Verilator 5.055 | 38 `tb_modes`, 9 mode comparisons, 6 `tb_rules` | PASS, 561 s (16 builds; one run 0.04 s) |
 | `make sim_icarus` | Icarus 14.0 (devel) | 15 `tb_modes`, 6 `tb_rules` | PASS, 33 s |
+| `make sim_xsim` | Vivado XSIM 2026.1 | 3 `tb_modes`, 6 `tb_rules` | PASS, 73 s |
+| `make sim_janushdl` | JanusHDL 0.17.0 | 3 `tb_modes`, 6 `tb_rules` | no: known JanusHDL issues |
 | `make formal` | Yosys 0.70 + Icarus | 5 SAT proofs, 1 exhaustive | PASS, 6 of 6, 19 s |
+| `make sanity` | all of the above | a few runs of each | PASS, 80 s (JanusHDL as known) |
+| `make regression` | all of the above | each target in full | PASS, 644 s (JanusHDL as known) |
 
 | File | Content |
 |---|---|
-| [`ccfpga_serdes.BFM.sv`](ccfpga_serdes.BFM.sv) | the model, for simulation |
-| [`ccfpga_serdes.SYNTH.sv`](ccfpga_serdes.SYNTH.sv) | for synthesis: `CC_SERDES` behind the model's ports and parameters |
-| [`ccfpga_serdes_pkg.sv`](ccfpga_serdes_pkg.sv) | 8b/10b codec and PRBS as functions, the model settings (`CDR_MODEL`, `BHV_*`) |
-| [`Makefile`](Makefile) | its own tests: `make` in this folder runs `sim_modes`, `sim_icarus` and `formal` |
-| [`tb_modes.sv`](tb_modes.sv) | one model looped back: the three `CDR_MODEL`s against each other, PRBS, decode table, registers |
-| [`tb_rules.sv`](tb_rules.sv) | the model's behaviour at its ports, rule by rule, where DS1001 is silent |
-| [`ccfpga_serdes.vlt`](ccfpga_serdes.vlt) | Verilator: no lint on the model |
-| [`formal_8b10b/`](formal_8b10b) | formal proofs of the 8b/10b codec (`run-formal.sh`) |
+| [`1.model/ccfpga_serdes.BFM.sv`](1.model/ccfpga_serdes.BFM.sv) | the model, for simulation |
+| [`1.model/ccfpga_serdes.SYNTH.sv`](1.model/ccfpga_serdes.SYNTH.sv) | for synthesis: `CC_SERDES` behind the model's ports and parameters |
+| [`1.model/ccfpga_serdes_pkg.sv`](1.model/ccfpga_serdes_pkg.sv) | 8b/10b codec and PRBS as functions, the model settings (`CDR_MODEL`, `BHV_*`) |
+| [`3.sim-regression/Makefile`](3.sim-regression/Makefile) | its own tests: `make` in this folder runs `sim_modes`, `sim_icarus` and `formal`; output in `work/` |
+| [`3.sim-regression/run-sanity.sh`](3.sim-regression/run-sanity.sh), [`run-regression.sh`](3.sim-regression/run-regression.sh) | the sanity and regression lists (`make sanity`, `make regression`) |
+| [`3.sim-regression/tb_modes.sv`](3.sim-regression/tb_modes.sv) | one model looped back: the three `CDR_MODEL`s against each other, PRBS, decode table, registers |
+| [`3.sim-regression/tb_rules.sv`](3.sim-regression/tb_rules.sv) | the model's behaviour at its ports, rule by rule, where DS1001 is silent |
+| [`1.model/ccfpga_serdes.vlt`](1.model/ccfpga_serdes.vlt) | Verilator: no lint on the model |
+| [`2.formal/`](2.formal) | formal proofs of the 8b/10b codec (`run-formal.sh`) |
 
 ## `ccfpga_serdes` vs `CC_SERDES`
 
@@ -73,7 +78,7 @@ iverilog -g2012 ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
 read_slang -D SYNTHESIS <cells_bb.v> ccfpga_serdes.SYNTH.sv <design>
 ```
 
-The model is not lint-clean by our RTL rules, on purpose (see [Implementation](#implementation)). Verilator users can turn lint off for it, as [`ccfpga_serdes.vlt`](ccfpga_serdes.vlt) does.
+The model is not lint-clean by our RTL rules, on purpose (see [Implementation](#implementation)). Verilator users can turn lint off for it, as [`1.model/ccfpga_serdes.vlt`](1.model/ccfpga_serdes.vlt) does.
 
 **Bring-up** is the silicon's, two ways:
 - **Parameters:** `SERDES_ENABLE = 1`, `PLL_EN_ADPLL_CTRL = 1`, `PLL_CONFIG_SEL = 1` and the PLL rate: the SerDes and PLL start from reset. openCologne-PCIE's `phy_top.sv` does this.
@@ -98,7 +103,7 @@ Every SerDes setting is a parameter, with its name and default. The model's own 
 | `BHV_VERBOSE` | `0` | package | Debug prints |
 | `SERDES_ENABLE_DEFAULT`, `SERDES_AUTO_INIT_DEFAULT` | `0`, `0` | package | Defaults of `SERDES_ENABLE` and `SERDES_AUTO_INIT`, the two parameters the vendor model lacks: `CC_SERDES`'s reset value of `0x5C`, so a design can start the BFM as it starts the chip. `0` as the vendor model: the SerDes starts off |
 
-Defines: `+define+CDR_MODEL=FAST` in Verilator, `-DCDR_MODEL=FAST` in Icarus. Edit the others in [`ccfpga_serdes_pkg.sv`](ccfpga_serdes_pkg.sv).
+Defines: `+define+CDR_MODEL=FAST` in Verilator, `-DCDR_MODEL=FAST` in Icarus. Edit the others in [`1.model/ccfpga_serdes_pkg.sv`](1.model/ccfpga_serdes_pkg.sv).
 
 ## Three levels of line and receiver: `CDR_MODEL`
 
@@ -187,7 +192,7 @@ None of it is visible at the fabric interface: analog and PMA internals (driver 
 
 ### Where DS1001 is silent
 
-Where the datasheet says nothing, the model picks a behaviour at its ports, to check on silicon. [`tb_rules.sv`](tb_rules.sv) checks it: 57 checks at 64 bits, each a PASS or FAIL line. The main ones:
+Where the datasheet says nothing, the model picks a behaviour at its ports, to check on silicon. [`3.sim-regression/tb_rules.sv`](3.sim-regression/tb_rules.sv) checks it: 57 checks at 64 bits, each a PASS or FAIL line. The main ones:
 
 - **Comma alignment** locks after 16 aligned commas. Once locked, a comma in another lane is not corrected, while a comma off the symbol boundary still realigns. `RX_BYTE_REALIGN_O` is a pulse.
 - **16 and 32-bit TX:** the line takes the quarters (halves) of `TX_DATA_I` in turn.
@@ -226,7 +231,7 @@ A behavioural model, not RTL: `#` delays (the serializer, sampler, CDR, clocks a
 
 ## DS1001, vendor model, BFM and SYNTH: where they differ
 
-DS1001 documents the HM; the other three are the `ccfpga_serdes` wrapper around it: the vendor model and the BFM in simulation, `ccfpga_serdes.SYNTH.sv` on the chip.
+DS1001 documents the HM; the other three are the `ccfpga_serdes` wrapper around it: the vendor model and the BFM in simulation, `1.model/ccfpga_serdes.SYNTH.sv` on the chip.
 
 | | DS1001: the HM, `CC_SERDES` | vendor model | BFM (simulation) | SYNTH (chip) |
 |---|---|---|---|---|
@@ -280,7 +285,7 @@ HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver se
 
 | Check | What | Where | Result |
 |---|---|---|---|
-| Formal | the 8b/10b codec: disparity, running disparity, comma format, injectivity, run length; exhaustive decode | [`formal_8b10b/`](formal_8b10b/README.md) | 6 of 6 |
+| Formal | the 8b/10b codec: disparity, running disparity, comma format, injectivity, run length; exhaustive decode | [`2.formal/`](2.formal/README.md) | 6 of 6 |
 | `sim_modes` | the three `CDR_MODEL`s against each other at 16, 32 and 64 bits, comma in every lane: data bit-exact, latency within 4 UI; PRBS with forced errors; 5 ms at 3 Gb/s; the random word phase; the decode table (all 1024 symbols), comma defaults, register readback, buffer errors. Then `tb_rules` | `make sim_modes` | 38 runs, 9 mode comparisons, 6 `tb_rules` runs: all pass |
 | `sim_icarus` | `tb_modes` and `tb_rules` in Icarus, each `CDR_MODEL`: keeps the model Icarus-clean | same, `make sim_icarus` | 15 + 6 runs, all pass |
 | PIPE test | openCologne-PCIE's PHY test, PIPE 64 | openCologne-PCIE, `run-phy.sh pipe64` | pass, 101 checks |

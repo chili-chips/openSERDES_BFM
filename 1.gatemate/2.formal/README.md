@@ -11,10 +11,10 @@ The proofs read `ccfpga_serdes_pkg.sv`, the package the SerDes BFM uses. They ch
 From the repo root:
 
 ```sh
-bash 1.gatemate/formal_8b10b/run-formal.sh
+bash 1.gatemate/2.formal/run-formal.sh
 ```
 
-or `make formal` in `1.gatemate`. Needs `yosys` with `read_slang` (tested with 0.70, openXC7) and `iverilog` (14.0 devel). The build goes to `~/.cache/opencologne/formal_8b10b` (`SERDES_BUILD_DIR` moves it).
+or `make formal` in `1.gatemate/3.sim-regression`. Needs `yosys` with `read_slang` (tested with 0.70, openXC7) and `iverilog` (14.0 devel). The build goes to `~/.cache/opencologne/formal_8b10b` (`SERDES_BUILD_DIR` moves it).
 
 | Property | Proved by | Statement |
 |---|---|---|

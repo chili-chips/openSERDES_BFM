@@ -7,19 +7,13 @@
 *.bak
 *.swp
 
-# Build and run outputs (make in 1.gatemate/)
-obj_*/
-obj_*.vvp
-modes_*.txt
-sim_*.log
-*.log
-*.jou
-*.pb
-*.wdb
-xsim.dir/
-.Xil/
+# Build and run outputs: all of them in <target>/3.sim-regression/work/
+work/
 
 # Waveforms
 *.vcd
 *.fst
-*.vvp
+
+# draw.io auto-backups
+*.bkp
+.$*
