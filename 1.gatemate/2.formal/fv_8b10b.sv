@@ -5,8 +5,6 @@
 // SAT properties of the BFM 8b/10b encoder, see README.md. The decode
 // round trip is in fv_8b10b_exhaustive.sv.
 
-`timescale 1ns/1ps
-
 module fv_enc_disparity
    import ccfpga_serdes_pkg::*;
 (

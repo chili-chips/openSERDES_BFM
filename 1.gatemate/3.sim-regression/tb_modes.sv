@@ -19,7 +19,7 @@
 // - no TX_BUF_ERR_O or RX_BUF_ERR_O once the stream is found, no stall.
 // Options:
 //   +cfg1=HEX    PLL_CFG1, another line rate (100 MHz reference): 063A is
-//                3 Gb/s, a UI the 100 fs time step can't hold
+//                3 Gb/s, a UI the 1 ps time step can't hold
 //   +run_us=N    run N us at least, the data checked all along
 //   +prbs=SEL    PRBS instead of data (TX and RX _PRBS_SEL_I): error-free,
 //                then TX_PRBS_FORCE_ERR_I high 4 times a clock, and once 3
@@ -65,12 +65,12 @@ module tb_modes #(
 
   initial begin : _clk_ref
     clk_ref = 1'b0;
-    forever #5 clk_ref = ~clk_ref;  // 100 MHz reference
+    forever #5ns clk_ref = ~clk_ref;  // 100 MHz reference
   end : _clk_ref
 
   initial begin : _clk_reg
     clk_reg = 1'b0;
-    forever #50 clk_reg = ~clk_reg;  // 10 MHz regfile clock
+    forever #50ns clk_reg = ~clk_reg;  // 10 MHz regfile clock
   end : _clk_reg
 
   always_comb begin
@@ -291,7 +291,7 @@ module tb_modes #(
     end
     else if (s[8] && lat_n < COMMAS) begin
       if (words_fd != 0) begin
-        $fdisplay(words_fd, "%0.3f", t - sent_t[0]);
+        $fdisplay(words_fd, "%0.3f", (t - sent_t[0]) / 1ns);  // ns
       end
       lat_n++;
     end
@@ -349,7 +349,7 @@ module tb_modes #(
 
   initial begin : _lut
     bit [10:0] e;
-    #1;
+    #1ns;
     // +nolut is a flag with no value: $test$plusargs is the call for it
     // verilog_lint: waive plusarg-assignment
     for (int s = 0; s < 1024 && !$test$plusargs("nolut"); s++) begin

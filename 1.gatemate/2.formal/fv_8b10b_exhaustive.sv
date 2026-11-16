@@ -4,8 +4,6 @@
 
 // The BFM 8b/10b decoder over its whole input space, see README.md
 
-`timescale 1ns/1ps
-
 module fv_8b10b_exhaustive;
    import ccfpga_serdes_pkg::*;
 

@@ -1,10 +1,16 @@
+<!--
+SPDX-FileCopyrightText: 2026 Chili.CHIPS
+
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
 # Target 1: `ccfpga_serdes` ports and parameters
 
 Every port and parameter of the GateMate SerDes BFM, one by one. The grouped view, the settings and the four-way compare: [Target 1](../README.md).
 
 ## Ports
 
-The GateMate SerDes by function. DS1001, the GateMate datasheet (section 2.5), documents the hard macro, `CC_SERDES`: 61 pins. Cologne Chip's simulation model and our BFM (`ccfpga_serdes.BFM.sv`) are the `ccfpga_serdes` wrapper around it: the same 84 ports, its own logic on 23 of them. For the chip, `ccfpga_serdes.SYNTH.sv` is the wrapper, with no logic: it connects the 61 pins.
+The GateMate SerDes by function. DS1001, the GateMate datasheet (section 2.5), documents the hard macro, `CC_SERDES`: 61 pins. CologneChip's simulation model and our BFM (`ccfpga_serdes.BFM.sv`) are the `ccfpga_serdes` wrapper around it: the same 84 ports, its own logic on 23 of them. For the chip, `ccfpga_serdes.SYNTH.sv` is the wrapper, with no logic: it connects the 61 pins.
 
 - 🟪 **HM**: a `CC_SERDES` pin (**Pin**), through the wrapper. All 61 are.
 - 🟥 **wrapper only**: the vendor model's own logic (config port, scan, test, core resets, serial pins, reference clock). On the chip unused, or the constant in brackets.
@@ -136,7 +142,7 @@ The vendor model's 115, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDE
 |---|---|---|---|
 | `TX_DATAPATH_SEL`, `RX_DATAPATH_SEL` | 3, 3 | M | word: 0 16, 1 32, 2 or 3 64 bits (20, 40, 80 without 8b/10b) |
 | 🟥 `TX_BUFFER_ADDR_WIDTH` | 5 | M | TX buffer depth, 2^N words (must stay 5) |
-| `TX_PMA_LOOPBACK` | 0 | M | TX PMA loopback mode (bit 1 must be 0) |
+| `TX_PMA_LOOPBACK` | 0 | M | TX PMA loopback mode, 0 to 3: not 0 lets `loopback_i` = 010 loop |
 | `RX_BUF_BYPASS` | 0 | M | 1: no elastic buffer (less latency) |
 | `RX_CLKCOR_USE` | 0 | M | elastic buffer: 0 phase alignment, 1 clock correction |
 | `RX_CLKCOR_MIN_LAT`, `RX_CLKCOR_MAX_LAT` | 32, 39 | M | buffer latency limits: below MIN it repeats a clock-correction sequence, above MAX it removes one |

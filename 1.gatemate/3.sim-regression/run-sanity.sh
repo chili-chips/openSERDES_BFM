@@ -31,7 +31,7 @@ run() {  # name, known issue ("" if none), its log signature, make target and va
 }
 
 JANUS_MODES="openCologne #12" JANUS_MODES_SIG="tb_modes.sv:294"
-JANUS_RULES="openCologne #13" JANUS_RULES_SIG="ccfpga_serdes.BFM.sv:438"
+JANUS_RULES="openCologne #13" JANUS_RULES_SIG="ccfpga_serdes.BFM.sv:440"
 
 run formal          "" "" formal "$@"
 run verilator-rules "" "" sim_rules RULES_RUNS=3:0:FAST "$@"

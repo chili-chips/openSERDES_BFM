@@ -43,6 +43,12 @@ IW    := $(W)/icarus
 XW    := $(W)/xsim
 LOGS  := $(W)/logs
 
+# The HDL has no `timescale: each simulator takes it on its command line.
+# 1ns/1ps, as JanusHDL (no option for it). Icarus has no option either: a
+# command file (-c) gives it
+TIMESCALE := 1ns/1ps
+ICARUS_TS := $(IW)/timescale.cf
+
 .PHONY: all sim_modes sim_rules sim_icarus sim_xsim sim_janushdl formal waves lint sanity regression clean
 
 all: sim_icarus sim_modes formal
@@ -50,21 +56,24 @@ all: sim_icarus sim_modes formal
 $(VW) $(IW) $(XW) $(LOGS):
 	@mkdir -p $@
 
+$(ICARUS_TS): | $(IW)
+	@echo "+timescale+$(TIMESCALE)" > $@
+
 # The SerDes BFM modes against each other, at each datapath width and comma
 # lane: data bit-exact, and the latency of every comma within MODES_TOL_NS
 # of ACCURATE's (4 UI at 2.5 Gb/s: FAST knows a bit only at the next edge)
 # The RX word phase is fixed here: the comma lane is swept instead. Then,
 # 64 bits: PRBS7 and PRBS31 with forced errors, each mode; 5 ms at 3 Gb/s
-# (a UI off the 100 fs grid), NONE and FAST; the random RX word phase with
+# (a UI off the 1 ps grid), NONE and FAST; the random RX word phase with
 # ALIGN_COMMA_WORD = 11, ACCURATE, seeds 1 to 3.
 MODES_TOL_NS ?= 1.6
 MODES_RUNS   := 0:0 0:1 1:0 1:1 1:3 3:0 3:3 3:5 3:7
-MODES_VLT    := verilator --binary --assert --timing --timescale 1ns/1ps -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
+MODES_VLT    := verilator --binary --assert --timing --timescale $(TIMESCALE) -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
                 -Wno-PINCONNECTEMPTY --top-module tb_modes $(MODEL)/ccfpga_serdes.vlt
 
 # tb_rules runs: datapath:RX_SLIDE_MODE:CDR_MODEL (a real line: FAST, ACCURATE)
 RULES_RUNS ?= 3:0:FAST 3:0:ACCURATE 0:0:FAST 3:1:FAST 3:2:FAST 3:3:FAST
-RULES_VLT  := verilator --binary --assert --timing --timescale 1ns/1ps -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
+RULES_VLT  := verilator --binary --assert --timing --timescale $(TIMESCALE) -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
               -Wno-PINCONNECTEMPTY --top-module tb_rules $(MODEL)/ccfpga_serdes.vlt
 # a tb_rules run's lines: the total, and any rule that failed
 RULES_GREP := grep -E "^TB_RULES: (DP .*|.*: FAIL .*)$$"
@@ -117,11 +126,11 @@ sim_rules: | $(VW) $(LOGS)
 ICARUS_MODELS ?= NONE FAST ACCURATE
 ICARUS_RUNS   ?= 0:1:0 1:3:0 1:1:1 3:0:0 3:3:3
 
-sim_icarus: | $(IW) $(LOGS)
+sim_icarus: $(ICARUS_TS) | $(IW) $(LOGS)
 	@L=$(LOGS)/sim_icarus.log; rm -f $$L; for m in $(ICARUS_MODELS); do for r in $(ICARUS_RUNS); do \
 	  dp=$${r%%:*}; c=$${r#*:}; c=$${c%%:*}; al=$${r##*:}; v=$(IW)/modes_$${m}_$${dp}_$$al.vvp; \
 	  rm -f $$v; \
-	  iverilog -g2012 -DCDR_MODEL=$$m -Ptb_modes.DP_SEL=$$dp -Ptb_modes.ALIGN=$$al -o $$v $(BFM) tb_modes.sv 2>&1 \
+	  iverilog -g2012 -c $(ICARUS_TS) -DCDR_MODEL=$$m -Ptb_modes.DP_SEL=$$dp -Ptb_modes.ALIGN=$$al -o $$v $(BFM) tb_modes.sv 2>&1 \
 	    | { grep -v "sorry: Case unique" || true; }; \
 	  test -f $$v; \
 	  vvp -N $$v +model=$$m +comma=$$c +nolut | grep "TB_MODES" | tee -a $$L; \
@@ -129,7 +138,7 @@ sim_icarus: | $(IW) $(LOGS)
 	@for r in $(RULES_RUNS); do \
 	  dp=$${r%%:*}; sl=$${r#*:}; sl=$${sl%%:*}; m=$${r##*:}; v=$(IW)/rules_$${dp}_$${sl}_$$m.vvp; \
 	  rm -f $$v; \
-	  iverilog -g2012 -DCDR_MODEL=$$m -Ptb_rules.DP=$$dp -Ptb_rules.SLIDE=$$sl -o $$v $(BFM) tb_rules.sv 2>&1 \
+	  iverilog -g2012 -c $(ICARUS_TS) -DCDR_MODEL=$$m -Ptb_rules.DP=$$dp -Ptb_rules.SLIDE=$$sl -o $$v $(BFM) tb_rules.sv 2>&1 \
 	    | { grep -v "sorry: Case unique" || true; }; \
 	  test -f $$v; \
 	  vvp -N $$v | $(RULES_GREP) | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $(LOGS)/sim_icarus.log; \
@@ -149,7 +158,7 @@ sim_xsim: | $(XW) $(LOGS)
 	  d=$(XW)/modes_$$m; rm -rf $$d; mkdir -p $$d; ( cd $$d; \
 	  $(XILINX_VIVADO)/bin/xvlog -sv --nolog -d CDR_MODEL=$$m -d BHV_RX_WORD_PHASE_RANDOM=0 $(XSIM_BFM) \
 	    $(CURDIR)/tb_modes.sv > xvlog.out 2>&1 || { cat xvlog.out; exit 1; }; \
-	  $(XILINX_VIVADO)/bin/xelab --nolog --timescale 1ns/1ps -generic_top DP_SEL=3 --snapshot s work.tb_modes \
+	  $(XILINX_VIVADO)/bin/xelab --nolog --timescale $(TIMESCALE) -generic_top DP_SEL=3 --snapshot s work.tb_modes \
 	    > xelab.out 2>&1 || { cat xelab.out; exit 1; }; \
 	  $(XILINX_VIVADO)/bin/xsim s --nolog -R -testplusarg comma=0 -testplusarg words=modes_$$m.txt > run.out 2>&1; \
 	  grep "TB_MODES" run.out | tee -a $$L ); \
@@ -159,7 +168,7 @@ sim_xsim: | $(XW) $(LOGS)
 	  rm -rf $$d; mkdir -p $$d; ( cd $$d; \
 	  $(XILINX_VIVADO)/bin/xvlog -sv --nolog -d CDR_MODEL=$$m $(XSIM_BFM) $(CURDIR)/tb_rules.sv \
 	    > xvlog.out 2>&1 || { cat xvlog.out; exit 1; }; \
-	  $(XILINX_VIVADO)/bin/xelab --nolog -generic_top DP=$$dp -generic_top SLIDE=$$sl --snapshot s work.tb_rules \
+	  $(XILINX_VIVADO)/bin/xelab --nolog --timescale $(TIMESCALE) -generic_top DP=$$dp -generic_top SLIDE=$$sl --snapshot s work.tb_rules \
 	    > xelab.out 2>&1 || { cat xelab.out; exit 1; }; \
 	  $(XILINX_VIVADO)/bin/xsim s --nolog -R > run.out 2>&1; \
 	  $(RULES_GREP) run.out | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $$L ); \
@@ -204,7 +213,7 @@ WAVES_SIM ?= verilator
 WV        := $(W)/waves
 PYTHON    ?= python3
 
-waves: | $(LOGS)
+waves: $(ICARUS_TS) | $(LOGS)
 	@mkdir -p $(WV)
 	@case $(WAVES_SIM) in \
 	verilator) \
@@ -216,9 +225,9 @@ waves: | $(LOGS)
 	  ( cd $(WV) && ../verilator/waves_rules/Vtb_rules | $(RULES_GREP) ) ;; \
 	icarus) \
 	  mkdir -p $(IW); \
-	  iverilog -g2012 -DCDR_MODEL=ACCURATE -DWAVES -Ptb_modes.DP_SEL=3 -o $(IW)/waves_modes.vvp $(BFM) tb_modes.sv 2>&1 \
+	  iverilog -g2012 -c $(ICARUS_TS) -DCDR_MODEL=ACCURATE -DWAVES -Ptb_modes.DP_SEL=3 -o $(IW)/waves_modes.vvp $(BFM) tb_modes.sv 2>&1 \
 	    | { grep -v "sorry: Case unique" || true; }; \
-	  iverilog -g2012 -DCDR_MODEL=FAST -DWAVES -Ptb_rules.DP=3 -Ptb_rules.SLIDE=0 -o $(IW)/waves_rules.vvp $(BFM) tb_rules.sv 2>&1 \
+	  iverilog -g2012 -c $(ICARUS_TS) -DCDR_MODEL=FAST -DWAVES -Ptb_rules.DP=3 -Ptb_rules.SLIDE=0 -o $(IW)/waves_rules.vvp $(BFM) tb_rules.sv 2>&1 \
 	    | { grep -v "sorry: Case unique" || true; }; \
 	  ( cd $(WV) && vvp -N ../icarus/waves_modes.vvp -fst +model=ACCURATE +comma=0 +nolut | grep "TB_MODES" ); \
 	  ( cd $(WV) && vvp -N ../icarus/waves_rules.vvp -fst | $(RULES_GREP) ) ;; \

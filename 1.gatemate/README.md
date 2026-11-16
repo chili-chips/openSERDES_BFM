@@ -7,20 +7,20 @@ SPDX-License-Identifier: BSD-3-Clause
 # Target 1: GateMate SerDes BFM
 
 <div align="center">
-  <a href="https://colognechip.com"><img width="30%" alt="Cologne Chip logo" src="../0.doc/artwork/Cologne-Chip.logo.png"></a>
+  <a href="https://colognechip.com"><img width="30%" alt="CologneChip logo" src="../0.doc/artwork/Cologne-Chip.logo.png"></a>
   &nbsp;&nbsp;
   <a href="https://colognechip.com/programmable-logic/gatemate/"><img width="30%" alt="GateMate logo" src="../0.doc/artwork/GateMate.png"></a>
 </div>
 
-`1.model/ccfpga_serdes.BFM.sv` is an open-source behavioural model of the GateMate SerDes, for simulation. It runs in Verilator and Icarus Verilog, with open tools only.
+`1.model/ccfpga_serdes.BFM.sv` is an open-source behavioural model of the GateMate SerDes, for simulation. It runs in Verilator, Icarus Verilog, Vivado XSIM and JanusHDL ([status](../README.md)). Verilator and Icarus keep it open tools only.
 
-**The SerDes is Cologne Chip's.** The `CC_SERDES` hard macro of the [GateMate FPGA](https://colognechip.com/programmable-logic/gatemate/) is designed by [Cologne Chip](https://colognechip.com). This BFM models it from their datasheet DS1001 and their simulation model. The datasheets are on Cologne Chip's site; they are not part of this repository. The BFM itself is by Chili.CHIPS.
+**The SerDes is CologneChip's.** The `CC_SERDES` hard macro of the [GateMate FPGA](https://colognechip.com/programmable-logic/gatemate/) is designed by [CologneChip](https://colognechip.com). This BFM models it from their datasheet DS1001 and their simulation model. The datasheets are on CologneChip's site; they are not part of this repository. The BFM itself is by Chili.CHIPS.
 
-**Level: `ccfpga_serdes`, not `CC_SERDES`.** The model replaces Cologne Chip's simulation model `ccfpga_serdes` (NDA), with its module name, ports and parameters, not the `CC_SERDES` primitive ([the two levels](#ccfpga_serdes-vs-cc_serdes)).
+**Level: `ccfpga_serdes`, not `CC_SERDES`.** The model replaces CologneChip's simulation model `ccfpga_serdes` (NDA), with its module name, ports and parameters, not the `CC_SERDES` primitive ([the two levels](#ccfpga_serdes-vs-cc_serdes)).
 
 **One instance, chip and simulation.** [`1.model/ccfpga_serdes.SYNTH.sv`](1.model/ccfpga_serdes.SYNTH.sv) is `ccfpga_serdes` for the chip: `CC_SERDES` behind the same ports and parameters, with `CC_SERDES`'s defaults, names only, no logic. A design instantiates `ccfpga_serdes` once, with no `` `ifdef SYNTHESIS ``: the file list takes `.SYNTH.sv` for synthesis and `.BFM.sv` for simulation.
 
-It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7.SerDes) and is used by [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE). This folder is the master copy.
+It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7.SerDes). openCologne and [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE) use it as a git submodule. This folder is the master copy.
 
 **Self-test** (WSL2 Ubuntu 24.04, wall clock with the build; per simulator: [top README](../README.md#self-test)):
 
@@ -31,8 +31,8 @@ It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7
 | `make sim_xsim` | Vivado XSIM 2026.1 | 3 `tb_modes`, 6 `tb_rules` | PASS, 73 s |
 | `make sim_janushdl` | JanusHDL 0.17.0 | 3 `tb_modes`, 6 `tb_rules` | no: known JanusHDL issues |
 | `make formal` | Yosys 0.70 + Icarus | 5 SAT proofs, 1 exhaustive | PASS, 6 of 6, 19 s |
-| `make sanity` | all of the above | a few runs of each | PASS, 80 s (JanusHDL as known) |
-| `make regression` | all of the above | each target in full | PASS, 644 s (JanusHDL as known) |
+| `make sanity` | all of the above | a few runs of each | PASS, about 2 minutes (JanusHDL as known) |
+| `make regression` | all of the above | each target in full | PASS, about 12 minutes (JanusHDL as known) |
 
 | File | Content |
 |---|---|
@@ -64,15 +64,16 @@ This model is fast, open, and runs your RTL as built, in Verilator or Icarus: no
 
 ## Quick start
 
-Compile the package first, then the model, then your design and testbench.
+Compile the package first, then the model, then your design and testbench. The HDL has no `` `timescale ``: give `1ns/1ps` on the simulator command line (XSIM: `xelab --timescale 1ns/1ps`; JanusHDL always uses 1ns/1ps).
 
 ```sh
 # Verilator
 verilator --binary --timing --timescale 1ns/1ps \
   ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
 
-# Icarus Verilog
-iverilog -g2012 ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
+# Icarus Verilog: no option for it, a command file instead
+echo "+timescale+1ns/1ps" > timescale.cf
+iverilog -g2012 -c timescale.cf ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
 
 # Yosys, for the chip
 read_slang -D SYNTHESIS <cells_bb.v> ccfpga_serdes.SYNTH.sv <design>
@@ -99,7 +100,6 @@ Every SerDes setting is a parameter, with its name and default. The model's own 
 | `BHV_CDR_KP` | `0.125` | package | `ACCURATE`: CDR loop gain |
 | `BHV_CDR_LOCK_EDGES` | `32` | package | Line edges to CDR lock |
 | `BHV_RX_PIPE_STAGES` | `3` | package | RX output delay, in clocks |
-| `BHV_RX_TCO_NS` | `0.1` | package | RX clock to outputs |
 | `BHV_VERBOSE` | `0` | package | Debug prints |
 | `SERDES_ENABLE_DEFAULT`, `SERDES_AUTO_INIT_DEFAULT` | `0`, `0` | package | Defaults of `SERDES_ENABLE` and `SERDES_AUTO_INIT`, the two parameters the vendor model lacks: `CC_SERDES`'s reset value of `0x5C`, so a design can start the BFM as it starts the chip. `0` as the vendor model: the SerDes starts off |
 
@@ -126,9 +126,9 @@ The three agree word for word, with latencies within 4 UI of each other (`sim_mo
 
 Every port and parameter, one by one: [1.model/README.md](1.model/README.md).
 
-The model takes all 115 `ccfpga_serdes` parameters, with their names and defaults, so any instantiation of the vendor model works unchanged, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDES`. It acts on 38. 7 more only set a register value to read back. The other 70 tune what a digital model doesn't have; it accepts them for drop-in compatibility. A value the datasheet doesn't allow (UG1001 Tables 7.12 to 7.14, DS1001 Tables 2.15 to 2.17), or one the model doesn't model, stops the simulation (`$error`, then `$fatal`). So do a bad `PLL_CFG1` or `RX_BUF_CFG` written at run time, when it takes effect. Example: `PLL_OUT_DIVSEL = 2`, n.a. in DS1001 Table 2.15.
+The model takes all 115 `ccfpga_serdes` parameters, with their names and defaults, so any instantiation of the vendor model works unchanged, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDES`. It acts on 39. 8 more only set a register value to read back. The other 70 tune what a digital model doesn't have; it accepts them for drop-in compatibility. A value the datasheet doesn't allow (UG1001 Tables 7.12 to 7.14, DS1001 Tables 2.15 to 2.17), or one the model doesn't model, stops the simulation (`$error`, then `$fatal`). So do a bad `PLL_CFG1` or `RX_BUF_CFG` written at run time, when it takes effect. Example: `PLL_OUT_DIVSEL = 2`, n.a. in DS1001 Table 2.15.
 
-**Modelled (34):**
+**Modelled (39):**
 
 | Group | Parameters | What they do in the model |
 |---|---|---|
@@ -151,10 +151,11 @@ The model takes all 115 `ccfpga_serdes` parameters, with their names and default
 | TX buffer (1) | `TX_BUFFER_ADDR_WIDTH` | must stay 5: the TX buffer is 32 words |
 | Loopback (1) | `TX_PMA_LOOPBACK` | TX to RX inside the PMA, as `LOOPBACK_I` |
 | Electrical idle (2) | `RX_EI_BIAS`, `RX_EI_BW_SEL` | `RX_EI_EN_O`: 0 turns the detector off; idle for `RX_EI_BW_SEL` reference clocks (1 to 8), as DS1001 Table 2.43 |
+| SerDes enable (1) | `SERDES_ENABLE` | `0x5C` bit 0 after reset: the SerDes on |
 
-**Read back only (7):** `PLL_SET_OP_LOCK`, `PLL_ENFORCE_LOCK`, `PLL_DISABLE_LOCK`, `PLL_LOCK_WINDOW`, `PLL_FAST_LOCK`, `PLL_SYNC_BYPASS`, `PLL_PFD_SELECT`. They set their bits of `PLL_CFG0`, which reads back as written; the PLL ignores them.
+**Read back only (8):** `PLL_SET_OP_LOCK`, `PLL_ENFORCE_LOCK`, `PLL_DISABLE_LOCK`, `PLL_LOCK_WINDOW`, `PLL_FAST_LOCK`, `PLL_SYNC_BYPASS`, `PLL_PFD_SELECT` set their bits of `PLL_CFG0`, which reads back as written; the PLL ignores them. `SERDES_AUTO_INIT` sets `0x5C` bit 1, read back only.
 
-**Accepted for compatibility (70):** analog and calibration, which a digital model doesn't have. Their status registers report done or locked.
+**Accepted for compatibility (70):** analog and calibration, which a digital model doesn't have. The model has none of their registers: a read gives 0 and a `$warning` (once per address).
 
 | Group | Parameters |
 |---|---|
@@ -166,8 +167,8 @@ The model takes all 115 `ccfpga_serdes` parameters, with their names and default
 
 ## Features
 
-- **Register and config file:** the address map (`0x00` to `0x42` RX/TX, `0x50` to `0x5B` PLL, `0x5C` SerDes config), masked writes, the `regfile_rdy_o` handshake. Status registers of blocks not modelled read back as converged, so code that polls them goes on. `PLL_CFG5` bit 0 reads the PLL lock.
-- **PLL:** the line rate from `PLL_FCNTRL`, `PLL_MAIN_DIVSEL` and `PLL_OUT_DIVSEL`, from the measured reference; the core clock for the datapath width. On an absolute time grid, so rates off the 100 fs grid don't drift (tested: 3 Gb/s for 5 ms).
+- **Register and config file:** the address map (`0x00` to `0x42` RX/TX, `0x50` to `0x5B` PLL, `0x5C` SerDes config), masked writes, the `regfile_rdy_o` handshake. A register the model has not reads 0, and an access gives a `$warning` (once per address): code that polls a status bit for 1 waits forever. The only status register is `PLL_CFG5`: bit 0 reads the PLL lock.
+- **PLL:** the line rate from `PLL_FCNTRL`, `PLL_MAIN_DIVSEL` and `PLL_OUT_DIVSEL`, from the measured reference; the core clock for the datapath width. On an absolute time grid, so rates off the 1 ps grid don't drift (tested: 3 Gb/s for 5 ms).
 - **TX:** 8b/10b with running disparity, `tx_char_dispmode` / `dispval` forcing, per-byte bypass, the TX buffer (32 words; `TX_BUFFER_ADDR_WIDTH` must stay 5) with its errors, serializer, electrical idle, polarity, PRBS7/15/23/31 with error injection (each rising edge of `TX_PRBS_FORCE_ERR_I` makes one bit wrong, which the checker counts as 3), and DS1001's square waves on TX codes 110 and 111. PRBS23 and 31 are the vendor model's; DS1001 lists PRBS7 and 15.
 - **RX:** the receiver by [`CDR_MODEL`](#three-levels-of-line-and-receiver-cdr_model), deserializer, comma detection, byte and word alignment by `ALIGN_MCOMMA_VALUE`, `ALIGN_PCOMMA_VALUE`, `ALIGN_COMMA_ENABLE` and `ALIGN_COMMA_WORD` (= `RX_ALIGN_COMMA_WORD` of `CC_SERDES`), bit slide, polarity, 8b/10b decode with `not_in_table` and `disp_err`, the RX buffer with clock correction (below), PRBS checker. While comma alignment is on, a comma off the word boundary realigns (DS1001 Table 2.50).
 - **Reset sequencers,** TX and RX, with the PMA/PCS/CDR/EQA/BUF reset timers.
@@ -229,7 +230,7 @@ PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_C
 
 ### Implementation
 
-A behavioural model, not RTL: `#` delays (the serializer, sampler, CDR, clocks and PLL lock run in real time), queues and events. Processes are plain `always`, assignments blocking, in reverse pipeline order; non-blocking only where another process samples the same clock edge: outputs to the fabric, and what crosses between the RX buffer's two sides. The RX outputs change `BHV_RX_TCO_NS` after the `clk_core_rx_i` edge, like a flop, so logic on a clock derived from the same edge samples them cleanly. The 8b/10b codec and the PRBS are functions in the package.
+A behavioural model, not RTL: `#` delays (the serializer, sampler, CDR, clocks and PLL lock run in real time), queues and events. Processes are plain `always`, assignments blocking, in reverse pipeline order: faster to simulate, with no non-blocking update events to schedule; non-blocking only where another process samples the same clock edge: outputs to the fabric, and what crosses between the RX buffer's two sides. No `#` delay on any output: a design that samples them on the same edge must do it race-free, as with any RTL. The 8b/10b codec and the PRBS are functions in the package.
 
 ## DS1001, vendor model, BFM and SYNTH: where they differ
 
@@ -253,7 +254,7 @@ HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver se
 | `PLL_CP` | 80 | 80 | 60 | 60 | 80 | no |
 | `RX_CDR_CKP` | `8'hF8` | `8'hF8` | `8'hAF` | `8'hAF` | `8'hF8` | no |
 
-**`RX_EI_BIAS`: set it.** Left unset, the BFM's RX electrical-idle detector runs (4, as DS1001) while SYNTH gives the chip the Yosys default, 0. `rx_ei_en_o` is the PIPE's `RxElecIdle` (`ccfpga_pipe_top.sv`), so openCologne-PCIE's `phy_top` sets 4, as Cologne Chip's `ccfpga_pipe_wrapper.sv` does. It also sets `PLL_SET_OP_LOCK` (0); the other four are not modelled.
+**`RX_EI_BIAS`: set it.** Left unset, the BFM's RX electrical-idle detector runs (4, as DS1001) while SYNTH gives the chip the Yosys default, 0. `rx_ei_en_o` is the PIPE's `RxElecIdle` (`ccfpga_pipe_top.sv`), so openCologne-PCIE's `phy_top` sets 4, as CologneChip's `ccfpga_pipe_wrapper.sv` does. It also sets `PLL_SET_OP_LOCK` (0); the other four are not modelled.
 
 **2. Where the BFM differs from the vendor model** (ports: none)
 
@@ -267,7 +268,8 @@ HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver se
 
 | | wrapper | `CC_SERDES` |
 |---|---|---|
-| `RX_CDR_LOCK_CFG` width | 15 bits | 8 bits |
+| `RX_CDR_LOCK_CFG` width | 15 bits in the vendor model and the BFM; 8 in SYNTH | 8 bits |
+| `RX_DBG_SEL` width | 4 bits in the BFM, as the DS1001 register (`0x2D` [4:1]); 2 in SYNTH | 2 bits (UG1001, Yosys) |
 | Ports | 84, lower case, some renamed (`tx_powerdown_n_i`, `tx_resetdone_o`, `rx_detect_done_o`, `clk_core_pll_o` ...) | 61, upper case (`TX_POWER_DOWN_N_I`, `TX_RESET_DONE_O`, `TX_DETECT_RX_DONE_O`, `PLL_CLK_O` ...) |
 | Wrapper-only ports | 23: config port, scan, test, core resets, serial pins, reference clock | – |
 | Parameter names | `ALIGN_*`, `RX_RESETDONE_GATE` | `RX_ALIGN_*`, `RX_RESET_DONE_GATE` |
@@ -331,7 +333,7 @@ Verilator is 12 to 44 times faster than Icarus. In Icarus, `FAST` and `ACCURATE`
 
 ## License
 
-BSD-3-Clause, Chili.CHIPS. `CC_SERDES`, GateMate and DS1001 are Cologne Chip's; the logos are their owners' ([top README](../README.md#license)).
+BSD-3-Clause, Chili.CHIPS. `CC_SERDES`, GateMate and DS1001 are CologneChip's; the logos are their owners' ([top README](../README.md#license)).
 
 --------------------
 #### End of Document

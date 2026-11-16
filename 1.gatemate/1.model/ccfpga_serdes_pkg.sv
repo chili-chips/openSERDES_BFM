@@ -101,7 +101,6 @@ package ccfpga_serdes_pkg;
   localparam int  BHV_CDR_LOCK_EDGES    = 32;     // line edges to CDR lock
   localparam bit  BHV_VERBOSE           = 0;      // debug prints
   localparam int  BHV_RX_PIPE_STAGES    = 3;      // RX output delay, in clocks
-  localparam real BHV_RX_TCO_NS         = 0.1;    // RX clock to outputs
 
   // Defaults of SERDES_ENABLE and SERDES_AUTO_INIT, the two BFM parameters
   // the vendor model does not have. They are CC_SERDES parameters: the

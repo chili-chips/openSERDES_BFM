@@ -21,9 +21,17 @@ precedence = "override"
 SPDX-FileCopyrightText = "Respective owners"
 SPDX-License-Identifier = "LicenseRef-Third-Party-Document"
 
+# The block diagram is ours; its legend embeds the CologneChip logo,
+# shown for acknowledgment only (NOT open-licensed, CologneChip).
+[[annotations]]
+path = ["0.doc/images/openSERDES_BFM.block-diagram.drawio*"]
+precedence = "override"
+SPDX-FileCopyrightText = ["2026 CHILI.CHIPS.LLC", "CologneChip (embedded logo)"]
+SPDX-License-Identifier = "BSD-3-Clause AND LicenseRef-Third-Party-Document"
+
 # our own logo, in 0.doc/artwork with the third-party ones
 [[annotations]]
-path = ["0.doc/artwork/openSERDES_BFM.hex.*"]
+path = ["0.doc/artwork/openSERDES_BFM.hex.*", "0.doc/artwork/openCologne.hex.png", "0.doc/artwork/openCologne.hex.NGI.png", "0.doc/artwork/openCologne-PCIE.hex.png"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 CHILI.CHIPS.LLC"
 SPDX-License-Identifier = "BSD-3-Clause"

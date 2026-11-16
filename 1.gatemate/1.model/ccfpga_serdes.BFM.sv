@@ -80,9 +80,11 @@
 //   samples the same clock edge: outputs to the fabric, and what crosses
 //   between the RX buffer's two sides. The 8b/10b codec and the PRBS are
 //   ccfpga_serdes_pkg.
+//
+//   No `timescale: the simulator command line sets it (1ns/1ps). Times are
+//   kept in ns at any time unit: delays are time literals (x * 1ns), and
+//   now_ns() reads the time.
 //==========================================================================
-
-`timescale 1ns / 100fs
 
 module ccfpga_serdes
   import ccfpga_serdes_pkg::*;
@@ -631,16 +633,21 @@ module ccfpga_serdes
   real ref_period = (BHV_REF_CLK_MHZ > 0.0) ? (1000.0 / BHV_REF_CLK_MHZ) : 10.0;
   bit  ref_seen = (BHV_REF_CLK_MHZ > 0.0);
 
+  // now, in ns at any time unit: a time literal takes the module's unit
+  function automatic real now_ns();
+    return $realtime / 1ns;
+  endfunction
+
   // The reference period is measured unless BHV_REF_CLK_MHZ gives it
   initial if (BHV_REF_CLK_MHZ <= 0.0) begin : ref_meter
     real last;
     @(posedge clk_ref_i);
-    last = $realtime;
+    last = now_ns();
     forever begin
       @(posedge clk_ref_i);
-      ref_period = $realtime - last;
+      ref_period = now_ns() - last;
       ref_seen   = TRUE;
-      last       = $realtime;
+      last       = now_ns();
     end
   end
 
@@ -707,7 +714,7 @@ module ccfpga_serdes
     done = FALSE;
     fork
       begin
-        #(BHV_PLL_LOCK_TIME_NS);
+        #(BHV_PLL_LOCK_TIME_NS * 1ns);
         done = TRUE;
       end
       wait (!pll_enabled);
@@ -730,7 +737,7 @@ module ccfpga_serdes
     longint k;
     clk_core_pll_o = LO;
     wait (pll_clk_run && (pll_period > 0.0));
-    t0   = $realtime;
+    t0   = now_ns();
     half = pll_period / 2.0;
     k    = 0;
     while (pll_clk_run) begin
@@ -740,11 +747,11 @@ module ccfpga_serdes
         k    = 0;
       end
       k++;
-      #(t0 + k * half - $realtime);
+      #((t0 + k * half - now_ns()) * 1ns);
       if (pll_clk_run) begin
         clk_core_pll_o = ~clk_core_pll_o;
         if (clk_core_pll_o) begin
-          pll_rise_t = $realtime;
+          pll_rise_t = now_ns();
         end
       end
     end
@@ -1048,7 +1055,7 @@ module ccfpga_serdes
       tx_buf_err_o <= LO;
     end
     else begin
-      tx_clk_t = $realtime;
+      tx_clk_t = now_ns();
       src_data = far_loopback ? rx_data_o : tx_data_i;
       src_k    = far_loopback ? rx_char_is_k_o : tx_char_is_k_i;
 
@@ -1173,7 +1180,7 @@ module ccfpga_serdes
       w          = tx_q.pop_front() >> (q * TX_WORD_BITS);
       tx_rot     = (tx_rot + 1) % 8;
     end
-    else if (!tx_starved && (($realtime - tx_clk_t) < 2.0 * TX_WORD_BITS * ui)) begin
+    else if (!tx_starved && ((now_ns() - tx_clk_t) < 2.0 * TX_WORD_BITS * ui)) begin
       tx_uflow = HI;
       if (BHV_VERBOSE) begin
         $display("[%0t] %m: TX elastic buffer underflow", $time);
@@ -1220,7 +1227,7 @@ module ccfpga_serdes
       k    = 0;
     end
     k++;
-    #(t0 + k * step - $realtime);
+    #((t0 + k * step - now_ns()) * 1ns);
   endtask
 
   // CDR_MODEL = FAST, ACCURATE: a bit a UI on the line
@@ -1233,7 +1240,7 @@ module ccfpga_serdes
       tx_rot     = 0;
       tx_line(LO, LO);
       wait (tx_ser_run && (ui > 0.0));
-      t0   = $realtime;
+      t0   = now_ns();
       step = ui;
       k    = 0;
       while (tx_ser_run) begin
@@ -1260,12 +1267,12 @@ module ccfpga_serdes
     longint                  k;
     frame = {CDR_NONE_ID_BITS'(cdr_none.my_id), HI};
     tx_line(LO, LO);   // electrical idle until the ID goes out
-    #1.0;
+    #1.0ns;
     for (int i = 0; i <= CDR_NONE_ID_BITS; i++) begin
       tx_line(TX_SERIO_P_B, frame[i]);
-      #0.5;
+      #0.5ns;
       tx_line(~TX_SERIO_P_B, frame[i]);
-      #0.5;
+      #0.5ns;
     end
     tx_line(TX_SERIO_P_B, LO);
 
@@ -1273,11 +1280,11 @@ module ccfpga_serdes
       tx_starved = TRUE;
       tx_rot     = 0;
       wait (tx_ser_run && (ui > 0.0));
-      t0   = $realtime;
+      t0   = now_ns();
       step = ui;
       k    = 0;
       tx_grid_wait(t0, step, k, ui);  // the first word a UI in, as the bits'
-      t0   = $realtime;
+      t0   = now_ns();
       step = ui * TX_WORD_BITS;
       k    = 0;
       while (tx_ser_run) begin
@@ -1340,18 +1347,18 @@ module ccfpga_serdes
       end
       else if (!rx_ei_quiet) begin
         rx_ei_quiet    = TRUE;
-        rx_ei_deadline = $realtime + (EI_WINDOW_UI * ui);
+        rx_ei_deadline = now_ns() + (EI_WINDOW_UI * ui);
       end
     end
   end
 
   always begin : ei_watchdog
     if (!rx_ei_filt && rx_ei_quiet) begin
-      if ($realtime >= rx_ei_deadline) begin
+      if (now_ns() >= rx_ei_deadline) begin
         rx_ei_filt = HI;
       end
       else begin
-        #(rx_ei_deadline - $realtime);  // then again: it may have moved
+        #((rx_ei_deadline - now_ns()) * 1ns);  // then again: it may have moved
       end
     end
     else begin
@@ -1819,7 +1826,7 @@ module ccfpga_serdes
     real e;
     if (CDR_MODEL == ACCURATE) begin
       if (rx_sampler_run && (ui > 0.0)) begin
-        e = $realtime - (rx_last_sample_t + (ui / 2.0));
+        e = now_ns() - (rx_last_sample_t + (ui / 2.0));
         while (e > ui / 2.0) begin
           e = e - ui;
         end
@@ -1847,8 +1854,8 @@ module ccfpga_serdes
     forever begin
       if (rx_sampler_run && (ui > 0.0)) begin
         if (fresh && (pll_rise_t >= 0.0)) begin  // a start: mid-bit on the PLL_CLK_O grid
-          x = ($realtime - pll_rise_t) / ui;
-          #(($floor(x - 0.5) + 1.5 - x) * ui);
+          x = (now_ns() - pll_rise_t) / ui;
+          #(($floor(x - 0.5) + 1.5 - x) * ui * 1ns);
         end
         fresh = FALSE;
         step  = ui + rx_phase_adj;
@@ -1859,9 +1866,9 @@ module ccfpga_serdes
           step = ui * 2.0;
         end
         rx_phase_adj = 0.0;
-        #(step);
-        rx_last_sample_t = $realtime;
-        rx_bit_t         = $realtime;
+        #(step * 1ns);
+        rx_last_sample_t = now_ns();
+        rx_bit_t         = now_ns();
         rx_bit_in(rx_pad_p ^ rx_polarity_i);
       end
       else begin
@@ -1892,7 +1899,7 @@ module ccfpga_serdes
   // the bits whose centres lie before now
   task automatic rx_fast_take();
     int n;
-    rx_fast_x = ($realtime - rx_fast_grid_t) / ui;
+    rx_fast_x = (now_ns() - rx_fast_grid_t) / ui;
     n         = int'($ceil(rx_fast_x - 0.5));
     for (int i = rx_fast_grid_n; i < n; i++) begin
       rx_bit_t = rx_fast_grid_t + (i + 0.5) * ui;
@@ -1917,26 +1924,26 @@ module ccfpga_serdes
           rx_fast_take();
           x = rx_fast_x;
           if (rx_fast_prov) begin  // the watchdog's grid: the first edge sets it
-            rx_fast_grid_t = $realtime;
+            rx_fast_grid_t = now_ns();
             rx_fast_grid_n = 0;
             rx_fast_prov   = FALSE;
           end
           else if ((x - $floor(x + 0.5) < 0.25) && (x - $floor(x + 0.5) > -0.25)) begin
-            rx_fast_grid_t = $realtime;
+            rx_fast_grid_t = now_ns();
             rx_fast_grid_n = 0;
             rx_lock_count();
           end
           else begin
             rx_bad_edge();
             if (!rx_cdr_locked_r && (rx_bad_cnt >= BHV_CDR_LOCK_EDGES)) begin
-              rx_fast_grid_t = $realtime;  // lost: a new grid from here
+              rx_fast_grid_t = now_ns();  // lost: a new grid from here
               rx_fast_grid_n = 0;
               rx_bad_cnt     = 0;
             end
           end
         end
         else begin
-          rx_fast_grid_t = $realtime;
+          rx_fast_grid_t = now_ns();
           rx_fast_grid_n = 0;
         end
         rx_fast_level = rx_pad_p;
@@ -1955,8 +1962,8 @@ module ccfpga_serdes
     forever begin
       if (rx_sampler_run && (ui > 0.0)) begin
         rx_fast_edge = LO;
-        t0           = $realtime;
-        #(10 * RX_BYTES * ui);
+        t0           = now_ns();
+        #(10 * RX_BYTES * ui * 1ns);
         if (!rx_fast_edge && rx_sampler_run) begin
           if (rx_fast_grid_t < 0.0) begin
             rx_fast_grid_t = t0;
@@ -2015,8 +2022,8 @@ module ccfpga_serdes
   // its bits [rx_none_pos, upto), with what a glitch inverted
   task automatic rx_none_feed(int upto);
     if (rx_none_glitch) begin  // still on: what it covered so far
-      rx_none_flip(rx_none_glitch_t, $realtime);
-      rx_none_glitch_t = $realtime;
+      rx_none_flip(rx_none_glitch_t, now_ns());
+      rx_none_glitch_t = now_ns();
     end
     for (int b = rx_none_pos; b < upto; b++) begin
       rx_bit_t = rx_none_word_t + (b + 0.5) * ui;
@@ -2051,7 +2058,7 @@ module ccfpga_serdes
       rx_word_start();
       r = (10 - rx_bit_cnt) + 10 * (RX_BYTES - 1 - rx_sym_cnt + int'(rx_drop_sym));
       if (pos + r < 10 * RX_BYTES) begin
-        #(rx_none_word_t + (pos + r) * ui - $realtime);
+        #((rx_none_word_t + (pos + r) * ui - now_ns()) * 1ns);
         if (rx_none_open) begin
           rx_none_feed(pos + r);
         end
@@ -2085,11 +2092,11 @@ module ccfpga_serdes
       end
       else if (rx_none_open && !rx_none_glitch) begin
         rx_none_glitch   = TRUE;
-        rx_none_glitch_t = $realtime;
+        rx_none_glitch_t = now_ns();
       end
       else if (rx_none_open) begin
         rx_none_glitch = FALSE;
-        rx_none_flip(rx_none_glitch_t, $realtime);
+        rx_none_flip(rx_none_glitch_t, now_ns());
       end
     end
   end
@@ -2104,7 +2111,7 @@ module ccfpga_serdes
     bit  ended;
     fork
       wait ((near_loopback ? cdr_none.my_id : cdr_none.peer_id) >= 0);
-      #20.0;
+      #20.0ns;
     join_any
     disable fork;
     if (!cdr_none_valid(rx_none_peer())) begin
@@ -2115,7 +2122,7 @@ module ccfpga_serdes
       wait ((near_loopback ? cdr_none.my_id : cdr_none.peer_id) >= 0);
       p     = rx_none_peer();
       n     = cdr_none_words[p];
-      tail  = rx_none_word_t + (10.0 * RX_BYTES + 0.5) * ui - $realtime;
+      tail  = rx_none_word_t + (10.0 * RX_BYTES + 0.5) * ui - now_ns();
       ended = FALSE;
       fork
         begin
@@ -2123,7 +2130,7 @@ module ccfpga_serdes
         end
         begin
           if (rx_none_open) begin  // no next word: the rest after the word end
-            #((tail > 0.0) ? tail : 0.0);
+            #(((tail > 0.0) ? tail : 0.0) * 1ns);
             ended = TRUE;
           end
           else begin
@@ -2139,18 +2146,18 @@ module ccfpga_serdes
         end
       end
       else if (p == rx_none_peer() && cdr_none_words[p] != n) begin  // a word starts
-        rx_none_last_t = $realtime;
+        rx_none_last_t = now_ns();
         rx_ei_filt     = LO;
         rx_ei_quiet    = TRUE;  // idle again unless a word comes in the window
-        rx_ei_deadline = $realtime + (EI_WINDOW_UI * ui);
+        rx_ei_deadline = now_ns() + (EI_WINDOW_UI * ui);
         if (rx_sampler_run && (ui > 0.0)) begin
           rx_none_start(p, 0);
         end
       end
       else if (rx_sampler_run && (ui > 0.0) && !rx_none_open
-               && ($realtime < rx_none_last_t + 10 * RX_BYTES * ui)) begin
+               && (now_ns() < rx_none_last_t + 10 * RX_BYTES * ui)) begin
         // the receiver starts inside a word: the bits still to come
-        rx_none_start(p, int'($ceil(($realtime - rx_none_last_t) / ui - 0.5 - 1.0e-6)));
+        rx_none_start(p, int'($ceil((now_ns() - rx_none_last_t) / ui - 0.5 - 1.0e-6)));
       end
     end
   end
@@ -2167,21 +2174,21 @@ module ccfpga_serdes
     if (rx_word_q.size() != 0) begin
       if (clk_core_rx_o) begin  // high from the PLL: an edge first
         clk_core_rx_o = LO;
-        #(ui);
+        #(ui * 1ns);
       end
       rx_word_c     = rx_word_q.pop_front();
       clk_core_rx_o = HI;
-      #(ui * 5.0);
+      #(ui * 5.0 * 1ns);
       clk_core_rx_o = LO;
       if (rx_word_q.size() != 0) begin
-        #(ui);  // a word waits: a short low phase
+        #(ui * 1ns);  // a word waits: a short low phase
       end
     end
     else if (rx_sampler_run && (ui > 0.0)) begin
       @(rx_word_done or negedge rx_sampler_run);
     end
     else if (pll_locked && (core_period > 0.0)) begin
-      #(core_period / 2.0);
+      #(core_period / 2.0 * 1ns);
       clk_core_rx_o = ~clk_core_rx_o;
     end
     else begin
@@ -2556,7 +2563,7 @@ module ccfpga_serdes
   end
 
   //=========================================================================
-  // RX: outputs, BHV_RX_TCO_NS after the clock
+  // RX: outputs, no delay after the clock
   //=========================================================================
   always @(eb_r_word or rx_pipe_o or eb_r_err or rx_err_pipe_o) begin : rx_outputs
     rx_word_t  w;
@@ -2574,12 +2581,12 @@ module ccfpga_serdes
       nit[i]    = b.nit;
       disp[i]   = b.disp;
     end
-    rx_data_o          <= #(BHV_RX_TCO_NS) d;
-    rx_char_is_k_o     <= #(BHV_RX_TCO_NS) k;
-    rx_char_is_comma_o <= #(BHV_RX_TCO_NS) c;
-    rx_not_in_table_o  <= #(BHV_RX_TCO_NS) nit;
-    rx_disp_err_o      <= #(BHV_RX_TCO_NS) disp;
-    rx_buf_err_o       <= #(BHV_RX_TCO_NS) err;
+    rx_data_o          <= d;
+    rx_char_is_k_o     <= k;
+    rx_char_is_comma_o <= c;
+    rx_not_in_table_o  <= nit;
+    rx_disp_err_o      <= disp;
+    rx_buf_err_o       <= err;
   end
 
   //#########################################################################
@@ -2593,7 +2600,7 @@ module ccfpga_serdes
       @(posedge tx_detect_rx_i);
       fork
         begin
-          #(BHV_RX_DETECT_TIME_NS);
+          #(BHV_RX_DETECT_TIME_NS * 1ns);
           rx_present_o     = (BHV_RX_PRESENT != 0);
           rx_detect_done_o = HI;
           if (BHV_VERBOSE) begin

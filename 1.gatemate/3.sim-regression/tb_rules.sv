@@ -13,10 +13,8 @@
 //   DP = 0: 16-bit TX lane rotation, PRBS-31 at 16 bits
 //   SLIDE = 1, 2, 3: RX_SLIDE_I, a bit, a symbol, both
 // Prints TB_RULES: <rule>: PASS/FAIL, then a total. make sim_modes and
-// make sim_icarus run it.
+// make sim_icarus run it. Times in ns at any time unit, as the BFM's.
 //==========================================================================
-`timescale 1ns / 100fs
-
 module tb_rules #(
     parameter int DP    = 3,  // TX/RX_DATAPATH_SEL: 0 16 bits, 3 64 bits
     parameter int SLIDE = 0   // RX_SLIDE_MODE
@@ -26,16 +24,21 @@ module tb_rules #(
   localparam real UI = 0.4;  // ns at 2.5 Gb/s
   localparam logic [15:0] CFG1 = (DP == 0) ? 16'h16DA : 16'h16FA;  // 2.5 Gb/s, a word a clock
 
+  // now, in ns: a time literal takes the module's unit
+  function automatic real now_ns();
+    return $realtime / 1ns;
+  endfunction
+
   logic clk_ref, clk_reg;
 
   initial begin : _clk_ref
     clk_ref = 1'b0;
-    forever #5 clk_ref = ~clk_ref;  // 100 MHz reference
+    forever #5ns clk_ref = ~clk_ref;  // 100 MHz reference
   end : _clk_ref
 
   initial begin : _clk_reg
     clk_reg = 1'b0;
-    forever #5 clk_reg = ~clk_reg;  // 100 MHz regfile clock
+    forever #5ns clk_reg = ~clk_reg;  // 100 MHz regfile clock
   end : _clk_reg
 
   logic arst_n = 1'b1;
@@ -68,7 +71,7 @@ module tb_rules #(
   /* verilator lint_off ZERODLY */
   initial begin : _own_clk
     own_clk = 1'b0;
-    forever #(own_half) own_clk = ~own_clk;
+    forever #(own_half * 1ns) own_clk = ~own_clk;
   end : _own_clk
   /* verilator lint_on ZERODLY */
 
@@ -83,7 +86,7 @@ module tb_rules #(
   // non-blocking assignment with a variable intra-assignment delay)
   /* verilator lint_off ZERODLY */
   task automatic line_late(logic p, logic n);
-    #(wd);
+    #(wd * 1ns);
     rxp_w = p;
     rxn_w = n;
   endtask
@@ -339,7 +342,7 @@ module tb_rules #(
     wait_t = t_ns;
     fork
       wait (aligned === 1'b1);
-      #(wait_t);
+      #(wait_t * 1ns);
     join_any
     disable fork;
   endtask
@@ -374,9 +377,9 @@ module tb_rules #(
 
   task pll_period();
     @(posedge clk_pll);
-    t0 = $realtime;
+    t0 = now_ns();
     repeat (20) @(posedge clk_pll);
-    per = ($realtime - t0) / 20.0;
+    per = (now_ns() - t0) / 20.0;
   endtask
 
   // the first K28.5 on the line after 20 UI low: 0 RD-, 1 RD+, -1 none
@@ -387,14 +390,14 @@ module tb_rules #(
     logic [39:0] b;
     z = 0;
     while (z < 20) begin
-      #(UI);
+      #(UI * 1ns);
       z = (txp === 1'b0) ? z + 1 : 0;
     end
     @(posedge txp);
-    #(UI / 2.0);
+    #(UI / 2.0 * 1ns);
     for (int i = 0; i < 40; i++) begin
       b[i] = txp;
-      #(UI);
+      #(UI * 1ns);
     end
     first_k = -1;
     for (int i = 30; i >= 0; i--) begin
@@ -453,7 +456,7 @@ module tb_rules #(
     // PLL_CONFIG_SEL = 0 (the C01 above): PLL_CLK_O 40 ns at 16FA, 4 Gb/s
     wr(8'h50, 16'h0C00, 16'hFFFF);
     wr(8'h50, 16'h0C61, 16'hFFFF);  // on, CONFIG_SEL 0
-    #2000;
+    #2000ns;
     pll_period();
     rule("PLL_CONFIG_SEL = 0: N = 20, PLL_CLK_O takes M3", (per > 39.9) && (per < 40.1), $sformatf(
          "%0.2f ns", per));
@@ -461,7 +464,7 @@ module tb_rules #(
     wr_rd(8'h51, 16'h06FA, 16'hFFFF, 16'h06FA, "PLL_CFG1 with the PLL off: written");
     wr(8'h50, 16'h0E62, 16'hFFFF);  // REF_BYPASS, then on
     wr(8'h50, 16'h0E63, 16'hFFFF);
-    #200;
+    #200ns;
     pll_period();
     rule("PLL_REF_BYPASS: PLL_CLK_O = f_ref / (M3 M4), before the lock",
          (per > 19.9) && (per < 20.1), $sformatf("%0.2f ns", per));
@@ -469,7 +472,7 @@ module tb_rules #(
     wr(8'h51, CFG1, 16'hFFFF);
     wr(8'h50, 16'h0C63, 16'hFFFF);  // on, CONFIG_SEL 1
     wr_rd(8'h51, 16'h06FA, 16'hFFFF, CFG1, "PLL_CFG1 with the PLL on: kept");
-    #2000;
+    #2000ns;
     pll_period();
     rule("PLL_CONFIG_SEL = 1: PLL_CFG1 sets the rate", (per > 31.9) && (per < 32.1), $sformatf(
          "%0.2f ns", per));
@@ -485,13 +488,13 @@ module tb_rules #(
   task rules_reset();
     // the counts from the release of the port, PLL_CLK_O clocks
     tx_rst = 1'b1;
-    #200;
+    #200ns;
     rule("TX_RESET_I held: TX_RESET_DONE_O low", txdone === 1'b0, $sformatf("%b", txdone));
     @(negedge clk_pll);
     tx_rst = 1'b0;
     clks_to_tx_done();
     rule("TX_RESET_I: done 16 clocks after", pll_n == 16, $sformatf("%0d", pll_n));
-    #1000;
+    #1000ns;
     @(negedge clk_pll);
     tx_pcs = 1'b1;
     @(negedge clk_pll);
@@ -499,14 +502,14 @@ module tb_rules #(
     clks_to_tx_done();
     rule("TX_PCS_RESET_I: done 12 clocks after", pll_n == 12, $sformatf("%0d", pll_n));
     wait_aligned(20000.0);
-    #1000;
+    #1000ns;
     @(negedge clk_pll);
     rx_buf = 1'b1;
     @(negedge clk_pll);
     rx_buf = 1'b0;
     clks_to_rx_done();
     rule("RX_BUF_RESET_I: done 12 clocks after", pll_n == 12, $sformatf("%0d", pll_n));
-    #1000;
+    #1000ns;
     @(negedge clk_pll);
     rx_pcs = 1'b1;
     @(negedge clk_pll);
@@ -515,20 +518,20 @@ module tb_rules #(
     rule("RX_PCS_RESET_I: done 16 clocks after", pll_n == 16, $sformatf("%0d", pll_n));
     rule("RX_PCS_RESET_I: comma alignment starts over", aligned === 1'b0, $sformatf("%b", aligned));
     wait_aligned(20000.0);
-    #1000;
+    #1000ns;
     @(negedge clk_pll);
     rx_eqa = 1'b1;
     @(negedge clk_pll);
     rx_eqa = 1'b0;
-    #300;
+    #300ns;
     rule("RX_EQA_RESET_I: done drops", rxdone === 1'b0, $sformatf("%b", rxdone));
     wait (rxdone === 1'b1);
     wait_aligned(20000.0);
-    #1000;
+    #1000ns;
     // power down: done stays
     txpd = 1'b0;
     rxpd = 1'b0;
-    #2000;
+    #2000ns;
     rule("TX/RX_POWER_DOWN_N_I: done stays", (txdone === 1'b1) && (rxdone === 1'b1), $sformatf(
          "%b%b", txdone, rxdone));
     rule("TX_POWERDOWN_N_I low: 1/1 on the TX pins, no Z", (txp === 1'b1) && (txn === 1'b1), $sformatf(
@@ -538,7 +541,7 @@ module tb_rules #(
     // near-end PCS loopback: no CDR lock wait; the line cut
     cut  = 1'b1;
     lb   = 3'b001;
-    #200;
+    #200ns;
     @(negedge clk_pll);
     rx_rst = 1'b1;
     @(negedge clk_pll);
@@ -550,15 +553,15 @@ module tb_rules #(
     rule("LOOPBACK_I = 001: near-end loopback", aligned === 1'b1, $sformatf("%b", aligned));
     lb = 3'b010;  // TX_PMA_LOOPBACK = 0: no loopback
     rx_rst = 1'b1;
-    #100;
+    #100ns;
     rx_rst = 1'b0;
-    #20000;
+    #20000ns;
     rule("LOOPBACK_I = 010, TX_PMA_LOOPBACK = 0: no loopback", aligned === 1'b0, $sformatf(
          "aligned %b", aligned));
     lb = 3'b000;
     cut = 1'b0;
     rx_rst = 1'b1;
-    #100;
+    #100ns;
     rx_rst = 1'b0;
     clks_to_rx_done();
     wait_aligned(30000.0);
@@ -570,30 +573,30 @@ module tb_rules #(
     txd_c   = {8{8'hBC}};
     txk_c   = 8'hFF;
     tx_rst  = 1'b1;
-    #200;
+    #200ns;
     tx_rst = 1'b0;
     line_symbol();  // the zeros of the reset, then the first symbol
     rule("TX running disparity starts RD+", first_k == 1, $sformatf(
          "the first K28.5: %0d (1 RD+, 0 RD-)", first_k));
     tx_mode = 0;
     wait_aligned(30000.0);
-    #1000;
+    #1000ns;
     // a stopped TX_CLK_I: zeros, no TX_BUF_ERR_O, then the data again
     @(negedge clk_pll);
     stop_tx = 1'b1;
-    #2000;
+    #2000ns;
     begin
       int ones;
       ones = 0;
       repeat (100) begin
-        #(UI);
+        #(UI * 1ns);
         ones += int'(txp);
       end
       rule("TX_CLK_I stopped: zero symbols", ones == 0, $sformatf("%0d ones in 100 UI", ones));
     end
     @(negedge clk_pll);
     stop_tx = 1'b0;
-    #3000;
+    #3000ns;
     rule("TX_CLK_I stopped: no TX_BUF_ERR_O", tx_err === 1'b0, $sformatf("%b", tx_err));
     rule("TX_CLK_I back: the data again", aligned === 1'b1, $sformatf("aligned %b", aligned));
     // a slow TX_CLK_I: underflow, sticky, zeros until TX_PCS_RESET_I
@@ -601,40 +604,40 @@ module tb_rules #(
     use_own  = 1'b1;
     fork
       wait (tx_err === 1'b1);
-      #20000;
+      #20000ns;
     join_any
     disable fork;
     use_own = 1'b0;
-    #2000;
+    #2000ns;
     begin
       int ones;
       ones = 0;
       repeat (100) begin
-        #(UI);
+        #(UI * 1ns);
         ones += int'(txp);
       end
       rule("TX underflow: TX_BUF_ERR_O sticky, zero symbols", (tx_err === 1'b1) && (ones == 0),
            $sformatf("err %b, %0d ones", tx_err, ones));
     end
     tx_pcs = 1'b1;
-    #100;
+    #100ns;
     tx_pcs = 1'b0;
-    #1500;
+    #1500ns;
     rule("TX_PCS_RESET_I clears TX_BUF_ERR_O", tx_err === 1'b0, $sformatf("%b", tx_err));
     // a fast TX_CLK_I: overflow
     own_half = 15.0;
     use_own  = 1'b1;
     fork
       wait (tx_err === 1'b1);
-      #40000;
+      #40000ns;
     join_any
     disable fork;
     use_own = 1'b0;
     rule("TX overflow: TX_BUF_ERR_O", tx_err === 1'b1, $sformatf("%b", tx_err));
     tx_pcs = 1'b1;
-    #100;
+    #100ns;
     tx_pcs = 1'b0;
-    #1500;
+    #1500ns;
     wait_aligned(30000.0);
   endtask
 
@@ -645,23 +648,23 @@ module tb_rules #(
     // acquisition from an RX reset: 17 commas at least; ALIGN_COMMA_WORD
     // 01 with the comma in lane 1: one symbol dropped, then lane 0
     clane = 1;
-    #500;
+    #500ns;
     r0 = realigns;
     rx_rst = 1'b1;
-    #100;
+    #100ns;
     rx_rst = 1'b0;
     clks_to_rx_done();
-    t0 = $realtime;
+    t0 = now_ns();
     // decoded data holds until aligned, K / NOT_IN_TABLE / DISP_ERR low
     // (after the RX buffer's old words)
-    #1000;
+    #1000ns;
     @(posedge clk_pll);
     d0 = rxd;
     k0 = rxk | rxnit | rxdisp;
     begin
       bit moved;
       moved = 1'b0;
-      while (aligned !== 1'b1 && ($realtime - t0) < 30000.0) begin
+      while (aligned !== 1'b1 && (now_ns() - t0) < 30000.0) begin
         @(posedge clk_pll);
         if (aligned !== 1'b1 && (rxd !== d0 || (rxk | rxnit | rxdisp) != 8'h00)) begin
           moved = 1'b1;
@@ -669,48 +672,48 @@ module tb_rules #(
       end
       rule("decoded data holds until aligned", !moved, $sformatf("moved %b", moved));
     end
-    rule("aligned after 16 commas or more", ($realtime - t0) > 64 * 32.0, $sformatf(
-         "%0.0f ns", $realtime - t0));
+    rule("aligned after 16 commas or more", (now_ns() - t0) > 64 * 32.0, $sformatf(
+         "%0.0f ns", now_ns() - t0));
     rule("ALIGN_COMMA_WORD 01, comma in lane 1: an RX_BYTE_REALIGN_O at most", realigns - r0 <= 1,
          $sformatf("%0d", realigns - r0));
-    #500;
+    #500ns;
     rule("ALIGN_COMMA_WORD 01: the comma in an even lane", (rx_comma_lane % 2) == 0, $sformatf(
          "lane %0d", rx_comma_lane));
     // locked: a comma in another lane is not corrected
     r0    = realigns;
     clane = 2;
-    #3000;
+    #3000ns;
     l0 = rx_comma_lane;
     rule("locked: a comma in a wrong lane is not corrected",
          (aligned === 1'b1) && (realigns == r0) && (l0 % 2 == 1), $sformatf(
          "aligned %b, %0d realigns, lane %0d", aligned, realigns - r0, l0));
     // locked: a comma a bit off realigns
     wd = wd + UI;
-    #2000;
+    #2000ns;
     rule("locked: a comma off the boundary realigns", realigns - r0 == 1, $sformatf(
          "%0d realigns", realigns - r0));
     wait_aligned(30000.0);
     rule("realigned", aligned === 1'b1, $sformatf("%b", aligned));
     // RX_COMMA_DETECT_EN_I low: RX_BYTE_IS_ALIGNED_O low
     comma_en = 1'b0;
-    #1000;
+    #1000ns;
     rule("RX_COMMA_DETECT_EN_I low: not aligned", aligned === 1'b0, $sformatf("%b", aligned));
     comma_en = 1'b1;
     wait_aligned(30000.0);
-    #500;
+    #500ns;
     // align enables low: frozen, still aligned; a slip is not followed
     mcomma = 1'b0;
     pcomma = 1'b0;
     r0     = realigns;
-    #500;
+    #500ns;
     wd = wd + UI;
-    #3000;
+    #3000ns;
     rule("RX_M/PCOMMA_ALIGN_I low: alignment frozen", (aligned === 1'b1) && (realigns == r0),
          $sformatf("aligned %b, %0d realigns", aligned, realigns - r0));
     mcomma = 1'b1;
     pcomma = 1'b1;
     wait_aligned(30000.0);
-    #3000;
+    #3000ns;
   endtask
 
   task rules_prbs();
@@ -719,11 +722,11 @@ module tb_rules #(
     r0      = realigns;
     rx_prbs = 3'b001;
     tx_prbs = 3'b001;
-    #2000;
+    #2000ns;
     rule("PRBS checker on: comma alignment holds", (realigns == r0) && (aligned === 1'b1),
          $sformatf("aligned %b, %0d realigns", aligned, realigns - r0));
     rx_prbs = 3'b101;
-    #2000;
+    #2000ns;
     begin
       int n;
       n = 0;
@@ -735,7 +738,7 @@ module tb_rules #(
     end
     rx_prbs = 3'b000;
     tx_prbs = 3'b000;
-    #2000;
+    #2000ns;
     wait_aligned(30000.0);
   endtask
 
@@ -744,21 +747,21 @@ module tb_rules #(
     begin
       real th;
       @(posedge clk_rxo);
-      th = $realtime;
+      th = now_ns();
       @(negedge clk_rxo);
-      th = $realtime - th;
+      th = now_ns() - th;
       rule("RX_CLK_O: a narrow pulse each word", th < 6.0 * UI, $sformatf("high %0.2f ns", th));
     end
     // electrical idle: RX_EI_EN_O, with the detector on (DS)
     ei_det = 1'b1;
     tx_ei  = 1'b1;
-    #3000;
+    #3000ns;
     rule("DS: TX_ELEC_IDLE_I: RX_EI_EN_O at the default RX_EI_BW_SEL", ei_o === 1'b1, $sformatf(
          "%b", ei_o));
     rule("TX_ELEC_IDLE_I: 0/0 on the TX pins, no X", (txp === 1'b0) && (txn === 1'b0), $sformatf(
          "%b%b", txp, txn));
     tx_ei = 1'b0;
-    #3000;
+    #3000ns;
     rule("RX_EI_EN_O low again with data", ei_o === 1'b0, $sformatf("%b", ei_o));
     ei_det = 1'b0;
   endtask
@@ -773,7 +776,7 @@ module tb_rules #(
     // quarter of TX_DATA_I
     tx_mode = 2;
     wait_aligned(30000.0);
-    #1000;
+    #1000ns;
     repeat (8) begin
       @(posedge clk_pll);
       if (rxk[0]) begin
@@ -790,7 +793,7 @@ module tb_rules #(
          ));
     rx_prbs = 3'b100;
     tx_prbs = 3'b100;
-    #5000;
+    #5000ns;
     begin
       int n;
       n = 0;
@@ -857,7 +860,7 @@ module tb_rules #(
     rx_8en = 1'b0;
     cevery = 1;
     clane  = 0;
-    #3000;
+    #3000ns;
     rule("slide mode: no automatic alignment", aligned === 1'b0, $sformatf("%b", aligned));
     settle_at();
     a0 = at;
@@ -886,9 +889,9 @@ module tb_rules #(
 
   //=======================================================================
   initial begin
-    #10 arst_n = 1'b0;
-    #90 arst_n = 1'b1;
-    #50;
+    #10ns arst_n = 1'b0;
+    #90ns arst_n = 1'b1;
+    #50ns;
     cfgw(8'h5C, 16'h0001);  // SerDes enable
     rx_rst = 1'b1;
     if (DP == 3 && SLIDE == 0) begin
@@ -899,7 +902,7 @@ module tb_rules #(
       wr(8'h50, 16'h0C63, 16'hFFFF);
     end
     wait (txdone === 1'b1);
-    #200;
+    #200ns;
     rx_rst = 1'b0;
     if (DP == 3 && SLIDE == 0) begin
       wait_aligned(60000.0);
