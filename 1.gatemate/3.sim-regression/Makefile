@@ -44,9 +44,9 @@ XW    := $(W)/xsim
 LOGS  := $(W)/logs
 
 # The HDL has no `timescale: each simulator takes it on its command line.
-# 1ns/1ps, as JanusHDL (no option for it). Icarus has no option either: a
-# command file (-c) gives it
-TIMESCALE := 1ns/1ps
+# 1ns/10ps; JanusHDL has no option for it and runs 1ns/10ps. Icarus has no
+# option either: a command file (-c) gives it
+TIMESCALE := 1ns/10ps
 ICARUS_TS := $(IW)/timescale.cf
 
 .PHONY: all sim_modes sim_rules sim_icarus sim_xsim sim_janushdl formal waves lint sanity regression clean
@@ -64,7 +64,7 @@ $(ICARUS_TS): | $(IW)
 # of ACCURATE's (4 UI at 2.5 Gb/s: FAST knows a bit only at the next edge)
 # The RX word phase is fixed here: the comma lane is swept instead. Then,
 # 64 bits: PRBS7 and PRBS31 with forced errors, each mode; 5 ms at 3 Gb/s
-# (a UI off the 1 ps grid), NONE and FAST; the random RX word phase with
+# (a UI off the time grid), NONE and FAST; the random RX word phase with
 # ALIGN_COMMA_WORD = 11, ACCURATE, seeds 1 to 3.
 MODES_TOL_NS ?= 1.6
 MODES_RUNS   := 0:0 0:1 1:0 1:1 1:3 3:0 3:3 3:5 3:7

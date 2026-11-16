@@ -29,7 +29,7 @@ Open-source simulation models (bus functional models, BFMs) of SerDes hard macro
 | [2.ihp-sg13g2](2.ihp-sg13g2/README.md) | [BRICD](https://www.thebricd.org)'s Open-SERDES | 130 nm SiGe BiCMOS, [IHP](https://www.ihp-microelectronics.com) [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK) | 🔴 TODO: the BFM follows the silicon design |
 | [3.gf180mcu](3.gf180mcu/README.md) | open-source SerDes | 180 nm CMOS, GlobalFoundries [GF180MCU](https://github.com/google/gf180mcu-pdk) | 🔴 TODO: the BFM follows the silicon design |
 
-#### How is it made?!
+### How is it made?!
 
 <div align="center">
   <img alt="openSERDES_BFM block diagram, Target 1: a design instantiates ccfpga_serdes once; the file list picks ccfpga_serdes.SYNTH.sv (CC_SERDES in the GateMate) or ccfpga_serdes.BFM.sv, which has the register file, PLL, reset sequencers and loopbacks, a TX path (8b/10b encoder and PRBS, TX buffer, serializer) and an RX path (receiver by CDR_MODEL, comma alignment, 8b/10b decoder and PRBS checker, RX buffer with clock correction)" width="100%" src="0.doc/images/openSERDES_BFM.block-diagram.drawio.png">
@@ -82,9 +82,35 @@ Results (WSL2 Ubuntu 24.04, wall clock with the build; 🟢 passes, 🟠 partly,
 | 🔴 JanusHDL 0.17.0 | no: does not elaborate (`tb_modes.sv:294`, a bit-select of a `real` array) | no: stops at time 0 (`ccfpga_serdes.BFM.sv:440`, a select of a select as a target, not supported at run time yet) | |
 | 🟢 Yosys 0.70 + Icarus (`make formal`) | 8b/10b: 6 of 6 proved | | 19 s |
 
+**Open upstream issues behind the results above:**
+
+| Tool | Issue | What | State |
+|---|---|---|---|
+| Vivado XSIM | [AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model), ours [#1](https://github.com/chili-chips/openSERDES_BFM/issues/1) | 2026.1: "Simulation engine not responding" at an event control in a forked process | open (worked around) |
+| JanusHDL | [openCologne#12](https://github.com/chili-chips/openCologne/issues/12) | an element of a queue of `realtime` is read as a bit-select (`tb_modes.sv:294`) | open |
+| JanusHDL | [openCologne#13](https://github.com/chili-chips/openCologne/issues/13) | a run-time write to an element of a packed struct member (`ccfpga_serdes.BFM.sv:440`) | open |
+
 ### Waveforms
 
 `make waves` runs `tb_modes` (64 bits, `ACCURATE`) and `tb_rules` (64 bits, `FAST`) once each, dumped whole, and writes `work/waves/verilator.tb_modes.fst`, `verilator.tb_rules.fst` and a [WaveCrux](https://wavecrux.app) session for each (`.wavecrux`, File > Open). `WAVES_SIM=icarus` does the same on Icarus. Rows: clocks, resets and PLL lock (yellow), TX data, K flags and line (orange), RX line, CDR lock, recovered clock, data and 8b/10b and alignment flags (blue).
+
+<div align="center">
+  <img alt="WaveCrux Pro on the Verilator tb_modes dump (64 bits, ACCURATE CDR), 59 us: reset releases, the PLL locks, the TX clock and data start, TX ready, the line toggles, the RX CDR locks, then comma alignment and RX data, with no 8b/10b, disparity, buffer or PRBS errors" width="100%" src="0.doc/images/wavecrux.tb_modes-bringup.png">
+</div>
+
+A whole bring-up in 59 µs: reset, PLL lock, TX ready, the line, CDR lock, comma alignment, then data with no 8b/10b, disparity or PRBS error.
+
+<div align="center">
+  <img alt="WaveCrux Pro, the same run at 40 us, 60 ns wide: 64-bit words of counting bytes go out on tx_d, serialised onto TX_SERIO_P_B bit by bit; the line comes back on RX_SERIO_P_B, and the recovered words come out on rx_d" width="100%" src="0.doc/images/wavecrux.tb_modes-traffic.png">
+</div>
+
+The same run at full traffic, 60 ns of it: 64-bit words of counting bytes (`tx_d`), every bit of them on the line (`TX_SERIO_P_B`, `RX_SERIO_P_B`), and the words recovered (`rx_d`).
+
+<div align="center">
+  <img alt="WaveCrux Pro on openCologne-PCIE's serial-link run (EP=rtl IFACE=serial), at 76 us during link training: the BFM's 64-bit words with K28.5 (COM, 0xbc) in byte 0 go out bit by bit on TX_SERIO_P_B, decoded as TS1 link=0 lane=0; the partner's TS2s come in on RX_SERIO_P_B and come out deserialised, with COM in byte 4" width="100%" src="0.doc/images/wavecrux.ocp-serializer.png">
+</div>
+
+The BFM in [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE)'s serial-link run, during link training: 64-bit words with COM (K28.5, `bc`) in byte 0 go out bit by bit, decoded as TS1 ordered sets by the [PCIE decoders](https://github.com/Ferrite-Engineering/wavecrux-decoders). The partner's TS2s come back deserialised, with COM in byte 4.
 
 A session binds by signal number, which differs between simulators, so each FST gets its own (`wavecrux-session.py`). `tb_modes.wavecrux` and `tb_rules.wavecrux` next to the Makefile are for the Verilator dumps. Needs `fst2vcd` (GTKWave).
 
@@ -101,13 +127,13 @@ Then point the file lists at the Target, package first:
 - simulation: `1.gatemate/1.model/ccfpga_serdes_pkg.sv`, `1.gatemate/1.model/ccfpga_serdes.BFM.sv`
 - synthesis: `1.gatemate/1.model/ccfpga_serdes.SYNTH.sv`
 - Verilator: `1.gatemate/1.model/ccfpga_serdes.vlt` turns lint off for the model; `CDR_MODEL` is a define (`+define+CDR_MODEL=FAST`)
-- timescale: none in the HDL; give `1ns/1ps` on the simulator command line. Verilator `--timescale 1ns/1ps`, XSIM `xelab --timescale 1ns/1ps`, Icarus a command file (`iverilog -c FILE`, the file holding `+timescale+1ns/1ps`); JanusHDL always uses 1ns/1ps
+- timescale: none in the HDL; give `1ns/10ps` on the simulator command line. Verilator `--timescale 1ns/10ps`, XSIM `xelab --timescale 1ns/10ps`, Icarus a command file (`iverilog -c FILE`, the file holding `+timescale+1ns/10ps`); JanusHDL always uses 1ns/1ps
 
 Used by [openCologne](https://github.com/chili-chips/openCologne) (`7.SerDes/1.openSERDES_BFM`) and [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE) (`2.rtl/1.phy/2.openSERDES_BFM`), as a git submodule of both.
 
 <div align="center">
   <a href="https://github.com/chili-chips/openCologne"><img width="13%" alt="openCologne project logo" src="0.doc/artwork/openCologne.hex.NGI.png"></a>
-  <a href="https://github.com/chili-chips/openCologne-PCIE"><img width="13%" alt="openCologne-PCIE project logo" src="0.doc/artwork/openCologne-PCIE.hex.png"></a>
+  <a href="https://github.com/chili-chips/openCologne-PCIE"><img width="16%" alt="openCologne-PCIE project logo" src="0.doc/artwork/openCologne-PCIE.hex.png"></a>
 </div>
 
 #### License
@@ -135,6 +161,10 @@ The BFMs are by Chili.CHIPS; this repository is volunteer work. Target 1 was dev
 ---
 ---
 # Target 2: ihp-sg13g2
+
+<div align="center">
+  <a href="https://www.thebricd.org"><img width="100%" alt="BRICD's Open-SERDES project: an open high-speed serial transceiver in IHP's 130 nm SiGe BiCMOS SG13G2, with a channel-to-GDS flow on open tools; transmitter (serializer, FFE, driver), channel, receiver (CTLE, sampler, CDR, deserializer)" src="0.doc/artwork/BRICD.Open-SERDES.png"></a>
+</div>
 
 TODO
 

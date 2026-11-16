@@ -19,7 +19,7 @@
 // - no TX_BUF_ERR_O or RX_BUF_ERR_O once the stream is found, no stall.
 // Options:
 //   +cfg1=HEX    PLL_CFG1, another line rate (100 MHz reference): 063A is
-//                3 Gb/s, a UI the 1 ps time step can't hold
+//                3 Gb/s, a UI the time step can't hold
 //   +run_us=N    run N us at least, the data checked all along
 //   +prbs=SEL    PRBS instead of data (TX and RX _PRBS_SEL_I): error-free,
 //                then TX_PRBS_FORCE_ERR_I high 4 times a clock, and once 3

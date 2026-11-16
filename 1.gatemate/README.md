@@ -64,15 +64,15 @@ This model is fast, open, and runs your RTL as built, in Verilator or Icarus: no
 
 ## Quick start
 
-Compile the package first, then the model, then your design and testbench. The HDL has no `` `timescale ``: give `1ns/1ps` on the simulator command line (XSIM: `xelab --timescale 1ns/1ps`; JanusHDL always uses 1ns/1ps).
+Compile the package first, then the model, then your design and testbench. The HDL has no `` `timescale ``: give `1ns/10ps` on the simulator command line (XSIM: `xelab --timescale 1ns/10ps`; JanusHDL always uses 1ns/1ps).
 
 ```sh
 # Verilator
-verilator --binary --timing --timescale 1ns/1ps \
+verilator --binary --timing --timescale 1ns/10ps \
   ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
 
 # Icarus Verilog: no option for it, a command file instead
-echo "+timescale+1ns/1ps" > timescale.cf
+echo "+timescale+1ns/10ps" > timescale.cf
 iverilog -g2012 -c timescale.cf ccfpga_serdes_pkg.sv ccfpga_serdes.BFM.sv <design and testbench>
 
 # Yosys, for the chip
@@ -168,7 +168,7 @@ The model takes all 115 `ccfpga_serdes` parameters, with their names and default
 ## Features
 
 - **Register and config file:** the address map (`0x00` to `0x42` RX/TX, `0x50` to `0x5B` PLL, `0x5C` SerDes config), masked writes, the `regfile_rdy_o` handshake. A register the model has not reads 0, and an access gives a `$warning` (once per address): code that polls a status bit for 1 waits forever. The only status register is `PLL_CFG5`: bit 0 reads the PLL lock.
-- **PLL:** the line rate from `PLL_FCNTRL`, `PLL_MAIN_DIVSEL` and `PLL_OUT_DIVSEL`, from the measured reference; the core clock for the datapath width. On an absolute time grid, so rates off the 1 ps grid don't drift (tested: 3 Gb/s for 5 ms).
+- **PLL:** the line rate from `PLL_FCNTRL`, `PLL_MAIN_DIVSEL` and `PLL_OUT_DIVSEL`, from the measured reference; the core clock for the datapath width. On an absolute time grid, so rates off the time grid don't drift (tested: 3 Gb/s for 5 ms).
 - **TX:** 8b/10b with running disparity, `tx_char_dispmode` / `dispval` forcing, per-byte bypass, the TX buffer (32 words; `TX_BUFFER_ADDR_WIDTH` must stay 5) with its errors, serializer, electrical idle, polarity, PRBS7/15/23/31 with error injection (each rising edge of `TX_PRBS_FORCE_ERR_I` makes one bit wrong, which the checker counts as 3), and DS1001's square waves on TX codes 110 and 111. PRBS23 and 31 are the vendor model's; DS1001 lists PRBS7 and 15.
 - **RX:** the receiver by [`CDR_MODEL`](#three-levels-of-line-and-receiver-cdr_model), deserializer, comma detection, byte and word alignment by `ALIGN_MCOMMA_VALUE`, `ALIGN_PCOMMA_VALUE`, `ALIGN_COMMA_ENABLE` and `ALIGN_COMMA_WORD` (= `RX_ALIGN_COMMA_WORD` of `CC_SERDES`), bit slide, polarity, 8b/10b decode with `not_in_table` and `disp_err`, the RX buffer with clock correction (below), PRBS checker. While comma alignment is on, a comma off the word boundary realigns (DS1001 Table 2.50).
 - **Reset sequencers,** TX and RX, with the PMA/PCS/CDR/EQA/BUF reset timers.

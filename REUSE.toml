@@ -31,7 +31,7 @@ SPDX-License-Identifier = "BSD-3-Clause AND LicenseRef-Third-Party-Document"
 
 # our own logo, in 0.doc/artwork with the third-party ones
 [[annotations]]
-path = ["0.doc/artwork/openSERDES_BFM.hex.*", "0.doc/artwork/openCologne.hex.png", "0.doc/artwork/openCologne.hex.NGI.png", "0.doc/artwork/openCologne-PCIE.hex.png"]
+path = ["0.doc/artwork/openSERDES_BFM.hex.*", "0.doc/artwork/openCologne.hex.NGI.png", "0.doc/artwork/openCologne-PCIE.hex.png"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 CHILI.CHIPS.LLC"
 SPDX-License-Identifier = "BSD-3-Clause"

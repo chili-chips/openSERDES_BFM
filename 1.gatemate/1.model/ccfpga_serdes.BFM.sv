@@ -81,7 +81,7 @@
 //   between the RX buffer's two sides. The 8b/10b codec and the PRBS are
 //   ccfpga_serdes_pkg.
 //
-//   No `timescale: the simulator command line sets it (1ns/1ps). Times are
+//   No `timescale: the simulator command line sets it (1ns/10ps). Times are
 //   kept in ns at any time unit: delays are time literals (x * 1ns), and
 //   now_ns() reads the time.
 //==========================================================================
@@ -1352,13 +1352,25 @@ module ccfpga_serdes
     end
   end
 
+  // A wait to the deadline, checked again after it (the deadline moves with
+  // the line). Under half a time step to go, the wait rounds to #0: no time
+  // passes, and that counts as the deadline, so it never loops at #0, at any
+  // time precision. (One whole-window wait in fork/join_any with disable fork
+  // would need no remainder, but crashes the XSIM 2026.1 engine.)
   always begin : ei_watchdog
+    real t, d;
     if (!rx_ei_filt && rx_ei_quiet) begin
-      if (now_ns() >= rx_ei_deadline) begin
+      t = now_ns();
+      d = rx_ei_deadline;
+      if (t >= d) begin
         rx_ei_filt = HI;
       end
       else begin
-        #((rx_ei_deadline - now_ns()) * 1ns);  // then again: it may have moved
+        #((d - t) * 1ns);  // then again: it may have moved
+        // under half a time step to go, the wait was #0: that is the deadline
+        if ((now_ns() == t) && (rx_ei_deadline == d) && rx_ei_quiet) begin
+          rx_ei_filt = HI;
+        end
       end
     end
     else begin

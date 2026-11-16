@@ -78,7 +78,7 @@ if command -v "${IVL}" >/dev/null 2>&1; then
   BUILD="${SERDES_BUILD_DIR:-$HOME/.cache/opencologne}/formal_8b10b"
   mkdir -p "${BUILD}"
   # no `timescale in the HDL: Icarus takes it from a command file
-  echo "+timescale+1ns/1ps" > "${BUILD}/timescale.cf"
+  echo "+timescale+1ns/10ps" > "${BUILD}/timescale.cf"
   if "${IVL}" -g2012 -c "${BUILD}/timescale.cf" -I "${MODEL_DIR}" \
        -o "${BUILD}/fv_exh.vvp" "${MODEL_DIR}/ccfpga_serdes_pkg.sv" "${HERE}/fv_8b10b_exhaustive.sv" 2>&1; then
     if "${VVP}" -N "${BUILD}/fv_exh.vvp" | tee "${BUILD}/fv_exh.log" \
