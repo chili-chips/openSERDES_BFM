@@ -2182,7 +2182,17 @@ module ccfpga_serdes
   // rx_word_q, so two that complete within one clock (a bulk take) both
   // go out.
   //=========================================================================
+  // From the PLL, edge k of a run is k half periods after the run's start:
+  // each edge rounds to the time precision on its own, so the rate stays
+  // exact at any precision (a fixed #(half) would lose the fraction each edge)
+  real    rx_idle_t0, rx_idle_half;
+  longint rx_idle_k;
+  bit     rx_idle_run = FALSE;
+
   always begin : rx_rec_clk_gen
+    if (!(pll_locked && (core_period > 0.0) && (rx_word_q.size() == 0) && !(rx_sampler_run && (ui > 0.0)))) begin
+      rx_idle_run = FALSE;
+    end
     if (rx_word_q.size() != 0) begin
       if (clk_core_rx_o) begin  // high from the PLL: an edge first
         clk_core_rx_o = LO;
@@ -2200,7 +2210,14 @@ module ccfpga_serdes
       @(rx_word_done or negedge rx_sampler_run);
     end
     else if (pll_locked && (core_period > 0.0)) begin
-      #(core_period / 2.0 * 1ns);
+      if (!rx_idle_run || (rx_idle_half != core_period / 2.0)) begin  // a new run
+        rx_idle_run  = TRUE;
+        rx_idle_t0   = now_ns();
+        rx_idle_half = core_period / 2.0;
+        rx_idle_k    = 0;
+      end
+      rx_idle_k++;
+      #((rx_idle_t0 + rx_idle_k * rx_idle_half - now_ns()) * 1ns);
       clk_core_rx_o = ~clk_core_rx_o;
     end
     else begin
