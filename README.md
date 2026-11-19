@@ -171,6 +171,7 @@ TODO
 #### References
 
 - [BRICD](https://www.thebricd.org)'s Open-SERDES
+- [OpenSERDES](https://github.com/SparcLab/OpenSERDES), Purdue SPARC Lab: an all-digital, process-portable SerDes in SKY130; paper "OpenSerDes: An Open Source Process-Portable All-Digital Serial Link", DATE 2021 ([PDF](https://sparclab.github.io/Sparclab-website/static/pdfs/c/DATE_KGK_OpenSerdes.pdf), [IEEE](https://ieeexplore.ieee.org/document/9474250))
 - 130nm SiGe BiCMOS [SG13G2](https://github.com/IHP-GmbH/IHP-Open-PDK)
 - [IHP](https://www.ihp-microelectronics.com)
 
