@@ -7,7 +7,7 @@
 [![GF180MCU:TODO](https://badgen.net/badge/GF180MCU/TODO/red)](3.gf180mcu)
 [![Verilator:Pass](https://badgen.net/badge/Verilator/Pass/green)](#self-test)
 [![Icarus:Pass](https://badgen.net/badge/Icarus/Pass/green)](#self-test)
-[![XSIM:Pass](https://badgen.net/badge/XSIM/Pass/green)](#self-test)
+[![XSIM:WIP](https://badgen.net/badge/XSIM/WIP/orange)](#self-test)
 [![JanusHDL:WIP](https://badgen.net/badge/JanusHDL/WIP/orange)](https://que.no/janushdl/)
 [![8b10b-Formal:Pass](https://badgen.net/badge/8b10b%20Formal/Pass/green)](1.gatemate/2.formal)
 [![WaveCrux:YES](https://badgen.net/badge/WaveCrux/YES/green)](https://wavecrux.app)
@@ -70,7 +70,8 @@ The Makefile has one target per simulator; there is no `SIM=` switch. Builds and
 
 - **Sanity** (`make sanity`, after every change): the proofs and a few runs on each simulator, about 2 minutes.
 - **Regression** (`make regression`, before a push): every simulator target in full and the proofs, about 12 minutes.
-- JanusHDL runs are listed as known failures (below): they do not fail a list, and pass it once JanusHDL is fixed.
+- JanusHDL's `tb_modes` runs and XSIM's `tb_rules` runs are listed as known failures (below): they do not fail a list, and pass it once the simulator is fixed.
+- Sanity also runs JanusHDL `--race-detect` on `tb_rules`: a race not on the known list (`RACES_OK` in `run-sanity.sh`, empty now) fails it.
 
 Results (WSL2 Ubuntu 24.04, wall clock with the build; 🟢 passes, 🟠 partly, 🔴 does not run):
 
@@ -78,8 +79,8 @@ Results (WSL2 Ubuntu 24.04, wall clock with the build; 🟢 passes, 🟠 partly,
 |---|---|---|---|
 | 🟢 Verilator 5.055 | PASS, 38 runs, 9 mode comparisons | PASS, 6 runs | 561 s for `make sim_modes` (16 builds); one run 0.04 s |
 | 🟢 Icarus 14.0 (devel) | PASS, 15 runs | PASS, 6 runs | 33 s for `make sim_icarus` |
-| 🟢 Vivado XSIM 2026.1 | PASS, 64 bits, each `CDR_MODEL` | PASS, 6 of 6 runs; the BFM works around an XSIM engine crash ([AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model)) | about 4 s build, 4 s run, each |
-| 🔴 JanusHDL 0.17.0 | no: does not elaborate (`tb_modes.sv:294`, a bit-select of a `real` array) | no: stops at time 0 (`ccfpga_serdes.BFM.sv:440`, a select of a select as a target, not supported at run time yet) | |
+| 🟠 Vivado XSIM 2026.2 | PASS, 64 bits, each `CDR_MODEL` | no: the simulator kernel dies (`FATAL_ERROR`, a double free) with the testbench's line delay: [#9](https://github.com/chili-chips/openSERDES_BFM/issues/9) | about 4 s build, 4 s run, each |
+| 🟠 JanusHDL 0.21.0 | no: stops at 1 ns (`tb_modes.sv:361`, a size cast of a parameter of the instance, `10'(u_serdes.ALIGN_PCOMMA_VALUE)`, not supported at run time yet: [#7](https://github.com/chili-chips/openSERDES_BFM/issues/7)) | PASS, 6 of 6 runs | 112 s for `make sim_janushdl` |
 | 🟢 Yosys 0.70 + Icarus (`make formal`) | 8b/10b: 6 of 6 proved | | 19 s |
 
 **Open upstream issues behind the results above:**
@@ -87,8 +88,9 @@ Results (WSL2 Ubuntu 24.04, wall clock with the build; 🟢 passes, 🟠 partly,
 | Tool | Issue | What | State |
 |---|---|---|---|
 | Vivado XSIM | [AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model), ours [#1](https://github.com/chili-chips/openSERDES_BFM/issues/1) | 2026.1: "Simulation engine not responding" at an event control in a forked process | open (worked around) |
-| JanusHDL | [openCologne#12](https://github.com/chili-chips/openCologne/issues/12) | an element of a queue of `realtime` is read as a bit-select (`tb_modes.sv:294`) | open |
-| JanusHDL | [openCologne#13](https://github.com/chili-chips/openCologne/issues/13) | a run-time write to an element of a packed struct member (`ccfpga_serdes.BFM.sv:440`) | open |
+| Vivado XSIM | [#9](https://github.com/chili-chips/openSERDES_BFM/issues/9) | 2026.1 and 2026.2: the kernel dies (`FATAL_ERROR`, a double free) in `tb_rules`, with its queue line delay | open |
+| JanusHDL | [#7](https://github.com/chili-chips/openSERDES_BFM/issues/7) | 0.21.0: a size cast of an instance parameter, `W'(inst.P)`, at run time (`tb_modes`) | open |
+| JanusHDL | [#8](https://github.com/chili-chips/openSERDES_BFM/issues/8) | 0.21.0 feature request: `--race-detect` to tell a harmless `always_comb` re-read from a glitch that reaches an edge | open |
 
 ### Waveforms
 
@@ -196,10 +198,25 @@ TODO
 | Tool / project | Issue | What | State |
 |---|---|---|---|
 | Vivado XSIM | [AMD forum](https://adaptivesupport.amd.com/s/question/0D5Pd000026YeziKAC/xsim-20261-simulation-engine-not-responding-at-an-event-control-in-a-forked-process-of-a-behavioral-model), ours [#1](https://github.com/chili-chips/openSERDES_BFM/issues/1) | 2026.1: "Simulation engine not responding" at an event control in a forked process of the TX reset sequence | open (worked around) |
-| JanusHDL | [openCologne#12](https://github.com/chili-chips/openCologne/issues/12) | 0.17.0: an element of a queue of `realtime` is read as a bit-select (`tb_modes.sv:294`) | open |
-| JanusHDL | [openCologne#13](https://github.com/chili-chips/openCologne/issues/13) | 0.17.0: a run-time write to an element of a packed struct member (`ccfpga_serdes.BFM.sv:440`) | open |
+| Vivado XSIM | [#9](https://github.com/chili-chips/openSERDES_BFM/issues/9) | 2026.1 and 2026.2: the kernel dies (`FATAL_ERROR`, a double free) in `tb_rules`, with its queue line delay | open |
+| JanusHDL | [openCologne#12](https://github.com/chili-chips/openCologne/issues/12) | 0.17.0: an element of a queue of `realtime` is read as a bit-select (`tb_modes.sv:294`) | closed (fixed in 0.21.0) |
+| JanusHDL | [openCologne#13](https://github.com/chili-chips/openCologne/issues/13) | 0.17.0: a run-time write to an element of a packed struct member (`ccfpga_serdes.BFM.sv:440`) | closed (fixed in 0.21.0) |
+| JanusHDL | [#7](https://github.com/chili-chips/openSERDES_BFM/issues/7) | 0.21.0: a size cast of an instance parameter, `W'(inst.P)`, at run time (`tb_modes.sv:361`) | open |
+| JanusHDL | [#8](https://github.com/chili-chips/openSERDES_BFM/issues/8) | 0.21.0 feature request: `--race-detect` to tell a harmless `always_comb` re-read from a glitch that reaches an edge | open |
+| Icarus Verilog | [iverilog#1877](https://github.com/steveicarus/iverilog/issues/1877) | 14.0 (devel) feature request: a queue of a packed struct; worked around with `bit [81:0]` ([#10](https://github.com/chili-chips/openSERDES_BFM/issues/10)) | open |
+| Icarus Verilog | [iverilog#1882](https://github.com/steveicarus/iverilog/issues/1882) | feature request: race detection and a process-order portability check | open |
+| Verilator | [verilator#9326](https://github.com/verilator/verilator/issues/9326) | feature request: race detection and a process-order portability check | open |
+| Verilator | [verilator#9265](https://github.com/verilator/verilator/issues/9265) (our [comment](https://github.com/verilator/verilator/issues/9265#issuecomment-7083237425)) | 5.055: `always @(x)` with `fork ... join_none` does not converge; our case: the fork only reads `x` | open |
 
 JanusHDL has no public tracker (closed source, so it can read encrypted IP): its issues are in our repos, under the [`JanusHDL` label](https://github.com/issues?q=org%3Achili-chips+label%3AJanusHDL).
+
+A sampler of relevant posts:
+
+- [End2End sim of PCIE link between Lattice and GateMate](https://lnkd.in/p/gpXvyHxD) (LinkedIn)
+
+<div align="center">
+  <img width="80%" alt="Lab view of a solid End2End sim" src="0.doc/images/lab-view-of-solid-end2end-sim.png">
+</div>
 
 
 ---
