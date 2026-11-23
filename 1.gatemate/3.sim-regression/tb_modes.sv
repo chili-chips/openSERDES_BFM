@@ -494,10 +494,10 @@ module tb_modes #(
                stops, buf_err, rf_bad, (errors == 0) ? "PASS" : "FAIL");
       $finish;
     end
-    fork
-      wait (lat_n >= COMMAS && $realtime >= run_us * 1us);
-      repeat (run_us + 200) #1us;
-    join_any
+    // the commas and the run time, or 200 us more (at a CLK_REF_I rise): no fork
+    while (!((lat_n >= COMMAS) && ($realtime >= run_us * 1us)) && ($realtime < (run_us + 200) * 1us)) begin
+      @(lat_n or posedge clk_ref);
+    end
     // stalled: nothing checked for a microsecond at the end
     if (lat_n < COMMAS || bad != 0 || lane_bad != 0 || lut_bad != 0 || rf_bad != 0 ||
         buf_err != 0 || stops != 0 || $realtime - last_t > 1us) begin

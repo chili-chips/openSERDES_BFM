@@ -28,8 +28,8 @@ It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7
 |---|---|---|---|
 | `make sim_modes` | Verilator 5.055 | 38 `tb_modes`, 9 mode comparisons, 6 `tb_rules` | PASS, 561 s (16 builds; one run 0.04 s) |
 | `make sim_icarus` | Icarus 14.0 (devel) | 15 `tb_modes`, 6 `tb_rules` | PASS, 33 s |
-| `make sim_xsim` | Vivado XSIM 2026.1 | 3 `tb_modes`, 6 `tb_rules` | PASS, 73 s |
-| `make sim_janushdl` | JanusHDL 0.17.0 | 3 `tb_modes`, 6 `tb_rules` | no: known JanusHDL issues |
+| `make sim_xsim` | Vivado XSIM 2026.2 | 3 `tb_modes`, 6 `tb_rules` | `tb_modes` PASS; `tb_rules` no: a known XSIM issue (#9) |
+| `make sim_janushdl` | JanusHDL 0.21.0 | 3 `tb_modes`, 6 `tb_rules` | `tb_rules` PASS; `tb_modes` no: a known JanusHDL issue |
 | `make formal` | Yosys 0.70 + Icarus | 5 SAT proofs, 1 exhaustive | PASS, 6 of 6, 19 s |
 | `make sanity` | all of the above | a few runs of each | PASS, about 2 minutes (JanusHDL as known) |
 | `make regression` | all of the above | each target in full | PASS, about 12 minutes (JanusHDL as known) |
@@ -93,10 +93,9 @@ Every SerDes setting is a parameter, with its name and default. The model's own 
 |---|---|---|---|
 | `CDR_MODEL` | `NONE` | define | The serial line and receiver: `NONE`, `FAST` or `ACCURATE` (below) |
 | `BHV_RX_WORD_PHASE_RANDOM` | `1` | define | The RX word counter starts at a random symbol, from the simulator seed, as on the silicon. `0`: it starts at 0, the comma in lane 0 |
-| `BHV_PLL_LOCK_TIME_NS` | `500.0` | package | PLL reset to lock |
+| `BHV_PLL_LOCK_TIME_NS` | `500.0` | package | PLL reset to lock, at the next `CLK_REF_I` rise |
 | `BHV_REF_CLK_MHZ` | `0.0` | package | Reference clock; `0.0`: measured at run time |
-| `BHV_RX_PRESENT` | `1` | package | What receiver detection finds |
-| `BHV_RX_DETECT_TIME_NS` | `120.0` | package | Receiver detection time |
+| `BHV_RX_PRESENT` | `1` | package | What receiver detection finds. Timing as the vendor model: 112 `CLK_REF_I` clocks plus the syncs |
 | `BHV_CDR_KP` | `0.125` | package | `ACCURATE`: CDR loop gain |
 | `BHV_CDR_LOCK_EDGES` | `32` | package | Line edges to CDR lock |
 | `BHV_RX_PIPE_STAGES` | `3` | package | RX output delay, in clocks |
@@ -230,7 +229,7 @@ PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_C
 
 ### Implementation
 
-A behavioural model, not RTL: `#` delays (the serializer, sampler, CDR, clocks and PLL lock run in real time), queues and events. Processes are plain `always`, assignments blocking, in reverse pipeline order: faster to simulate, with no non-blocking update events to schedule; non-blocking only where another process samples the same clock edge: outputs to the fabric, and what crosses between the RX buffer's two sides. No `#` delay on any output: a design that samples them on the same edge must do it race-free, as with any RTL. The 8b/10b codec and the PRBS are functions in the package.
+A behavioural model, not RTL: `#` delays (the serializer, sampler, CDR, clocks and PLL lock run in real time), queues and events. Processes are plain `always`, assignments blocking, in reverse pipeline order: faster to simulate, with no non-blocking update events to schedule; non-blocking only where another process samples the same clock edge: outputs to the fabric, what crosses between the RX buffer's two sides, the RX reset releases, and the RX status bits CLK_CORE_RX_I takes to the outputs. A value that decides a result has one owner process: e.g. FAST's line edges and its timeout (PLL_CLK_O) are one process, with no fork. No `#` delay on any output: a design that samples them on the same edge must do it race-free, as with any RTL. The 8b/10b codec and the PRBS are functions in the package.
 
 ## DS1001, vendor model, BFM and SYNTH: where they differ
 
@@ -239,22 +238,25 @@ DS1001 documents the HM; the other three are the `ccfpga_serdes` wrapper around 
 | | DS1001: the HM, `CC_SERDES` | vendor model | BFM (simulation) | SYNTH (chip) |
 |---|---|---|---|---|
 | Ports | 61 pins | 84: the 61, and 23 of its own | the same 84 | the same 84; the 23 unused or constant |
-| Parameters | 208 (Yosys); defaults in the register map, Table 2.59 | 115: 110 of the HM's, 5 of its own | 117: + `SERDES_ENABLE`, `SERDES_AUTO_INIT` | the same 117, passed to `CC_SERDES` with its (Yosys) defaults |
+| Parameters | 208 (Yosys); defaults in the register map, Table 2.59 | 115: 110 of the HM's, 5 of its own | 117: + `SERDES_ENABLE`, `SERDES_AUTO_INIT` | the same 117, with the vendor model's defaults and widths, passed to `CC_SERDES` |
 
-HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver sets for electrical idle (`*_EI`) and receiver detection (`*_RXDET`), 12 each; test mode's port overrides (`*_OVR`, 26) and their values (e.g. `RX_RESET`, `TX_POLARITY`); debug, calibration and eye-measurement controls; `RX_CDR_TRANS_TH`, `SERDES_TESTMODE`.
+The vendor model, the BFM and SYNTH agree on every parameter default and width.
 
-**1. Defaults that differ** (all others agree, wherever they exist)
+HM only, not set through the wrapper: 71 of the 208 parameters. Test mode's port overrides (`*_OVR`, 26) and their values (e.g. `RX_RESET`, `TX_POLARITY`): the vendor model has none, so 0, as `CC_SERDES`; debug, calibration and eye-measurement controls; `RX_CDR_TRANS_TH`, `SERDES_TESTMODE`. The TX driver sets for electrical idle (`*_EI`) and receiver detection (`*_RXDET`), 12 each, copy the main set (`TX_AMP` ...) in SYNTH, as the vendor model's register file does.
 
-| Parameter | DS1001 | `CC_SERDES` (Yosys) | vendor model | BFM | SYNTH | the BFM models it |
-|---|---|---|---|---|---|---|
-| `RX_EI_BIAS` | 4 | 0 | 4 | **4** | **0** | yes: 0 is the detector off (as the vendor model) |
-| `PLL_SET_OP_LOCK` | 0 | 0 | 1 | 1 | 0 | read back only |
-| `RX_CDR_LOCK_CFG` | `8'hD5` | `8'hD5` | `15'h08D5` | `15'h08D5` | `8'hD5` | no |
-| `PLL_CI` | 3 | 3 | 1 | 1 | 3 | no |
-| `PLL_CP` | 80 | 80 | 60 | 60 | 80 | no |
-| `RX_CDR_CKP` | `8'hF8` | `8'hF8` | `8'hAF` | `8'hAF` | `8'hF8` | no |
+**1. Defaults where the wrapper differs from `CC_SERDES`** (all others agree, wherever they exist)
 
-**`RX_EI_BIAS`: set it.** Left unset, the BFM's RX electrical-idle detector runs (4, as DS1001) while SYNTH gives the chip the Yosys default, 0. `rx_ei_en_o` is the PIPE's `RxElecIdle` (`ccfpga_pipe_top.sv`), so openCologne-PCIE's `phy_top` sets 4, as CologneChip's `ccfpga_pipe_wrapper.sv` does. It also sets `PLL_SET_OP_LOCK` (0); the other four are not modelled.
+| Parameter | DS1001 | `CC_SERDES` (Yosys) | nextpnr, unset | vendor model, BFM, SYNTH | the BFM models it |
+|---|---|---|---|---|---|
+| `RX_EI_BIAS` | 4 | 0 | 0 | 4 | yes: 0 is the detector off (as the vendor model) |
+| `PLL_SET_OP_LOCK` | 0 | 0 | 0 | 1 | read back only |
+| `RX_CDR_LOCK_CFG` | `8'hD5` | `8'hD5` | `8'hD5` | `15'h08D5` (the chip takes [7:0]) | no |
+| `PLL_CI` | 3 | 3 | 3 | 1 | no |
+| `PLL_CP` | 80 | 80 | 80 | 60 | no |
+| `RX_CDR_CKP` | `8'hF8` | `8'hF8` | `8'hF8` | `8'hAF` | no |
+| `TX_DC_ENABLE_RXDET` (HM only) | 63 | 63 | **0**: receiver detection off | 63 (`TX_DC_ENABLE`) | analog, no |
+
+nextpnr gives a parameter Yosys did not write its own default: a direct `CC_SERDES` instance read with `read_verilog` gets `TX_DC_ENABLE_RXDET` 0, against DS1001. `read_slang` writes all 208 from `cells_bb.v`; SYNTH sets it either way.
 
 **2. Where the BFM differs from the vendor model** (ports: none)
 
@@ -263,18 +265,21 @@ HM only, not set through the wrapper: 95 of the 208 parameters. The TX driver se
 | `SERDES_ENABLE`, `SERDES_AUTO_INIT` | – | 0, 0 | `CC_SERDES` parameters: the BFM starts like the chip |
 | SerDes enable | `0x5C` on the config port | also `SERDES_ENABLE`, and `0x5C` on the register file | as the chip |
 | `RX_EI_EN_O` | idle only with X or Z on both pins; with `RX_EI_BW_SEL` 1 to 15 never high (its filter takes the output, not the samples) | idle when P = N, after `RX_EI_BW_SEL` reference clocks, as DS1001 Table 2.43 | our line has no X or Z |
+| TX pins in power down (`TX_POWERDOWN_N_I` low) | Z and Z | 1 and 1 | our line has no X or Z |
+| TX pins in electrical idle (`TX_ELEC_IDLE_I`) | X and X | 0 and 0 | the same |
+| `TX_DETECT_RX_PRESENT_O` | always 0: its comparator fixes the line at 0.5 V, so the default `TX_CM_THRESHOLD_0/1` (14, 16) never read a far end | `BHV_RX_PRESENT` (1) | analog, not modelled; detection timing, DONE and PRESENT hold: as the vendor model |
 
 **3. Where the wrapper (all three) differs from `CC_SERDES`**
 
 | | wrapper | `CC_SERDES` |
 |---|---|---|
-| `RX_CDR_LOCK_CFG` width | 15 bits in the vendor model and the BFM; 8 in SYNTH | 8 bits |
-| `RX_DBG_SEL` width | 4 bits in the BFM, as the DS1001 register (`0x2D` [4:1]); 2 in SYNTH | 2 bits (UG1001, Yosys) |
+| `RX_CDR_LOCK_CFG` width | 15 bits; SYNTH passes [7:0] | 8 bits |
+| `RX_DBG_SEL` width | 4 bits, as DS1001 (`0x2D` [4:1]), nextpnr and prjpeppercorn; SYNTH passes [1:0] | 2 bits in Yosys `cells_bb.v`: values 4 to 15 cannot reach the chip |
 | Ports | 84, lower case, some renamed (`tx_powerdown_n_i`, `tx_resetdone_o`, `rx_detect_done_o`, `clk_core_pll_o` ...) | 61, upper case (`TX_POWER_DOWN_N_I`, `TX_RESET_DONE_O`, `TX_DETECT_RX_DONE_O`, `PLL_CLK_O` ...) |
 | Wrapper-only ports | 23: config port, scan, test, core resets, serial pins, reference clock | – |
 | Parameter names | `ALIGN_*`, `RX_RESETDONE_GATE` | `RX_ALIGN_*`, `RX_RESET_DONE_GATE` |
 | Wrapper-only parameters | `TX_BUFFER_ADDR_WIDTH`; four `RX_*_OVR` | one field, `RX_EN_EQA_EXT_VALUE` |
-| HM-only parameters | – | 95: `*_EI`, `*_RXDET`, `*_OVR`, debug (above) |
+| HM-only parameters | SYNTH copies the main TX set into `*_EI`, `*_RXDET` | 95: `*_EI`, `*_RXDET`, `*_OVR`, debug (above) |
 
 **Notes**
 
@@ -330,6 +335,7 @@ Verilator is 12 to 44 times faster than Icarus. In Icarus, `FAST` and `ACCURATE`
 |---|---|
 | [openCologne](https://github.com/chili-chips/openCologne) | [7.SerDes](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/3.iclink-sv/2.sim/README.md): the IC Link PHY, one-way and two-way; the board top with the FIFO pump; `sim_link_ppm`, two boards 200 ppm apart kept in step by the RX buffer's clock correction (`MIN_LAT` 8, `MAX_LAT` 12, K23.7 bursts) |
 | [openCologne-PCIE](https://github.com/chili-chips/openCologne-PCIE) | `2.rtl/1.phy/3.sim` (`run-phy.sh pipe64`): the PIPE test; `2.rtl/4.dll/sim`: DLL, MAC/LTSSM, PIPE and this SerDes, two link partners |
+| [pci_eerie, GateMate port](https://github.com/goran-mahovlic/pci_eerie/tree/gatemate-w8/gatemate) (Goran Mahovlić, Intergalaktik) | the Endpoint on this SerDes against the [openPCIE_BFM](https://github.com/chili-chips/openPCIE_BFM) RC model on the serial line: 64-bit PIPE at Gen1, 128-bit at Gen2, the speed change from 2.5 to 5.0 GT/s; 59 rules, 0 violations, before its first link on the ULX5M-M2 board ([post, 2026-11-19](https://lnkd.in/p/gkBUxmdS)) |
 
 ## License
 

@@ -96,7 +96,6 @@ package ccfpga_serdes_pkg;
   localparam real BHV_PLL_LOCK_TIME_NS  = 500.0;  // PLL reset to lock
   localparam real BHV_REF_CLK_MHZ       = 0.0;    // reference clock; 0: measured
   localparam int  BHV_RX_PRESENT        = 1;      // receiver detection finds a far end
-  localparam real BHV_RX_DETECT_TIME_NS = 120.0;  // receiver detection time
   localparam real BHV_CDR_KP            = 0.125;  // ACCURATE: CDR loop gain
   localparam int  BHV_CDR_LOCK_EDGES    = 32;     // line edges to CDR lock
   localparam bit  BHV_VERBOSE           = 0;      // debug prints

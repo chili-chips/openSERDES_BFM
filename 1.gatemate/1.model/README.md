@@ -110,7 +110,7 @@ The GateMate SerDes by function. DS1001, the GateMate datasheet (section 2.5), d
 
 ## Parameters
 
-The vendor model's 115, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDES`: 117. All but 🟥 are `CC_SERDES` parameters, each the reset value of the register-file field of its name (`ALIGN_*` is `RX_ALIGN_*`, `RX_RESETDONE_GATE` is `RX_RESET_DONE_GATE`). **Default**: DS1001's register map (Table 2.59); six differ elsewhere ([four-way compare](../README.md#ds1001-vendor-model-bfm-and-synth-where-they-differ)). **BFM**: M modelled, R read back only, – accepted, not modelled (analog or calibration).
+The vendor model's 115, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDES`: 117. All but 🟥 are `CC_SERDES` parameters, each the reset value of the register-file field of its name (`ALIGN_*` is `RX_ALIGN_*`, `RX_RESETDONE_GATE` is `RX_RESET_DONE_GATE`). **Default**: the vendor model's, in the BFM and SYNTH alike; five differ from DS1001's register map (Table 2.59) and `CC_SERDES`: `PLL_SET_OP_LOCK`, `PLL_CI`, `PLL_CP`, `RX_CDR_CKP`, `RX_CDR_LOCK_CFG`; `RX_EI_BIAS` (4) from `CC_SERDES` (0) only ([four-way compare](../README.md#ds1001-vendor-model-bfm-and-synth-where-they-differ)). **BFM**: M modelled, R read back only, – accepted, not modelled (analog or calibration).
 
 - 🟥 **wrapper only**: `TX_BUFFER_ADDR_WIDTH`; the four `RX_*_OVR`, which the wrapper packs into `RX_EN_EQA_EXT_VALUE` of `CC_SERDES`.
 
@@ -125,9 +125,9 @@ The vendor model's 115, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDE
 | `PLL_CONFIG_SEL` | 0 | M | 1: the ADPLL takes its settings from the register file, 0: internal values |
 | `PLL_REF_BYPASS` | 0 | M | the reference clock bypasses the ADPLL to its clock output |
 | `PLL_REF_SEL`, `PLL_REF_RTERM` | 0, 1 | M | reference clock: 0 single-ended, 1 LVDS; its termination |
-| `PLL_SET_OP_LOCK`, `PLL_ENFORCE_LOCK`, `PLL_DISABLE_LOCK` | 0, 0, 0 | R | force the locked bit: to 1 in OP mode, overwrite it, to 0 |
+| `PLL_SET_OP_LOCK`, `PLL_ENFORCE_LOCK`, `PLL_DISABLE_LOCK` | 1, 0, 0 | R | force the locked bit: to 1 in OP mode, overwrite it, to 0 |
 | `PLL_LOCK_WINDOW`, `PLL_FAST_LOCK`, `PLL_SYNC_BYPASS`, `PLL_PFD_SELECT` | 1, 1, 0, 0 | R | lock window (1 short), fast lock-in by binary search, no lock-in phase sync, PFD synchroniser |
-| `PLL_CI`, `PLL_CP`, `PLL_FILTER_SHIFT` | 3, 80, 2 | – | loop filter: integral and proportional coefficients; their left shift while unlocked |
+| `PLL_CI`, `PLL_CP`, `PLL_FILTER_SHIFT` | 1, 60, 2 | – | loop filter: integral and proportional coefficients; their left shift while unlocked |
 | `PLL_SAR_LIMIT`, `PLL_OPEN_LOOP`, `PLL_FT` | 2, 0, 512 | – | fast lock-in limit; open-loop mode and its fine tune |
 | `PLL_AO`, `PLL_SCAP`, `PLL_SCAP_AUTO_CAL` | 0, 0, 1 | – | coarse tune: PMOS and capacitor switches, capacitor auto tune |
 | `PLL_BISC_MODE` | 4 | – | built-in self calibration of CP: bit 0 on; mode A or B (B preferred) |
@@ -163,8 +163,8 @@ The vendor model's 115, plus `SERDES_ENABLE` and `SERDES_AUTO_INIT` of `CC_SERDE
 | Parameters | Default | BFM | What |
 |---|---|---|---|
 | `RX_CDR_FORCE_LOCK` | 0 | M | force the CDR lock |
-| `RX_CDR_CKP`, `RX_CDR_CKI` | `8'hF8`, 0 | – | CDR loop: proportional and integral coefficients |
-| `RX_CDR_LOCK_CFG` | `8'hD5` | – | CDR lock configuration |
+| `RX_CDR_CKP`, `RX_CDR_CKI` | `8'hAF`, 0 | – | CDR loop: proportional and integral coefficients |
+| `RX_CDR_LOCK_CFG` | `15'h08D5` | – | CDR lock configuration |
 | `RX_CDR_SET_ACC_CONFIG`, `RX_CDR_FREQ_ACC`, `RX_CDR_PHASE_ACC` | 0, 0, 0 | – | preset the CDR frequency (bit 1) and phase (bit 0) accumulators, with these values |
 | `ALIGN_MCOMMA_VALUE`, `ALIGN_PCOMMA_VALUE` | `10'h283`, `10'h17C` | M | minus and plus comma (K28.5) |
 | `ALIGN_COMMA_ENABLE` | `10'h3FF` | M | mask: the comma bits compared |

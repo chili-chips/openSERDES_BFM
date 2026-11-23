@@ -29,7 +29,7 @@
 #           RULES_RUNS     the tb_rules runs, DP:SLIDE:CDR_MODEL
 #           ICARUS_MODELS  ICARUS_RUNS: the tb_modes runs of sim_icarus
 #           XSIM_MODELS    JANUS_MODELS: the tb_modes runs of sim_xsim, sim_janushdl
-#           XILINX_VIVADO  where Vivado is (default ~/Xilinx/2026.1/Vivado)
+#           XILINX_VIVADO  where Vivado is (default ~/Xilinx/2026.2/Vivado)
 
 # a simulator that fails in a pipe (| tee) fails the target
 SHELL       := /bin/bash
@@ -44,7 +44,7 @@ XW    := $(W)/xsim
 LOGS  := $(W)/logs
 
 # The HDL has no `timescale: each simulator takes it on its command line.
-# 1ns/10ps; JanusHDL has no option for it and runs 1ns/10ps. Icarus has no
+# 1ns/10ps (Verilator, xelab and jhdl --timescale). Icarus has no
 # option either: a command file (-c) gives it
 TIMESCALE := 1ns/10ps
 ICARUS_TS := $(IW)/timescale.cf
@@ -149,7 +149,7 @@ sim_icarus: $(ICARUS_TS) | $(IW) $(LOGS)
 # Vivado XSIM: tb_modes at 64 bits, comma in lane 0, each CDR_MODEL; then
 # tb_rules. xvlog, xelab and xsim write in the current directory: each run
 # builds and runs in its own work/xsim/<run>/
-XILINX_VIVADO ?= $(HOME)/Xilinx/2026.1/Vivado
+XILINX_VIVADO ?= $(HOME)/Xilinx/2026.2/Vivado
 XSIM_BFM      := $(abspath $(BFM))
 XSIM_MODELS   ?= NONE FAST ACCURATE
 
@@ -170,8 +170,8 @@ sim_xsim: | $(XW) $(LOGS)
 	    > xvlog.out 2>&1 || { cat xvlog.out; exit 1; }; \
 	  $(XILINX_VIVADO)/bin/xelab --nolog --timescale $(TIMESCALE) -generic_top DP=$$dp -generic_top SLIDE=$$sl --snapshot s work.tb_rules \
 	    > xelab.out 2>&1 || { cat xelab.out; exit 1; }; \
-	  $(XILINX_VIVADO)/bin/xsim s --nolog -R > run.out 2>&1; \
-	  $(RULES_GREP) run.out | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $$L ); \
+	  $(XILINX_VIVADO)/bin/xsim s --nolog -R > run.out 2>&1 || true; \
+	  { $(RULES_GREP) run.out || true; grep -a -m1 -E "FATAL_ERROR|engine not responding" run.out || true; } | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $$L ); \
 	done
 	@test $$(grep -c "^TB_MODES: .*: PASS$$" $(LOGS)/sim_xsim.log) -eq $(words $(XSIM_MODELS))
 	@test $$(grep -c "^TB_RULES: .*: PASS$$" $(LOGS)/sim_xsim.log) -eq $(words $(RULES_RUNS))
@@ -187,14 +187,14 @@ JANUS_S      ?= 900
 sim_janushdl: | $(LOGS)
 	@L=$(CURDIR)/$(LOGS)/sim_janushdl.log; rm -f $$L; touch $$L; for m in $(JANUS_MODELS); do \
 	  d=$(JW)/modes_$$m; rm -rf $$d; mkdir -p $$d; ( cd $$d; \
-	  timeout $(JANUS_S) $(JHDL) --top tb_modes +define+CDR_MODEL=$$m +define+BHV_RX_WORD_PHASE_RANDOM=0 -gDP_SEL=3 \
+	  timeout $(JANUS_S) $(JHDL) --top tb_modes --timescale $(TIMESCALE) +define+CDR_MODEL=$$m +define+BHV_RX_WORD_PHASE_RANDOM=0 -gDP_SEL=3 \
 	    $(XSIM_BFM) $(CURDIR)/tb_modes.sv +comma=0 +words=modes_$$m.txt > run.out 2>&1 || true; \
 	  grep "TB_MODES" run.out | tee -a $$L || { echo "TB_MODES: $$m: no result:"; $(JANUS_ERR); } | tee -a $$L ); \
 	done
 	@L=$(CURDIR)/$(LOGS)/sim_janushdl.log; for r in $(RULES_RUNS); do \
 	  dp=$${r%%:*}; sl=$${r#*:}; sl=$${sl%%:*}; m=$${r##*:}; d=$(JW)/rules_$${dp}_$${sl}_$$m; \
 	  rm -rf $$d; mkdir -p $$d; ( cd $$d; \
-	  timeout $(JANUS_S) $(JHDL) --top tb_rules +define+CDR_MODEL=$$m -gDP=$$dp -gSLIDE=$$sl \
+	  timeout $(JANUS_S) $(JHDL) --top tb_rules --timescale $(TIMESCALE) +define+CDR_MODEL=$$m -gDP=$$dp -gSLIDE=$$sl \
 	    $(XSIM_BFM) $(CURDIR)/tb_rules.sv > run.out 2>&1 || true; \
 	  $(RULES_GREP) run.out | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $$L || \
 	    { echo "TB_RULES: $$r: no result:"; $(JANUS_ERR); } | tee -a $$L ); \

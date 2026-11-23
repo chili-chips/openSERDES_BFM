@@ -221,11 +221,11 @@ module ccfpga_serdes
     input  logic        testmode_i,
     input  logic        scan_enable_i,
     input  logic [ 6:0] scan_in_i,
-    output logic [ 6:0] scan_out_o = '0,
+    output logic [ 6:0] scan_out_o,  // an assign
     input  logic [ 2:0] loopback_i,
     input  logic        pll_reset_i,
     output logic        clk_core_pll_o = '0,
-    output logic        reset_core_pll_n_o = '0,
+    output logic        reset_core_pll_n_o,  // an assign: 0 until the lock
     output logic        refclk_sel_o = '0,
     output logic        refclk_rterm_o = '0,
     input  logic        RX_SERIO_P_B,
@@ -698,35 +698,31 @@ module ccfpga_serdes
   bit  pll_clk_run;         // PLL_CLK_O runs
   real pll_rise_t = -1.0;  // ... and rose last here
 
-  always @(reset_n_i or pll_reset_i or csr.serdes_cfg or csr.pll_cfg0 or pll_locked) begin : pll_state
-    pll_enabled        = reset_n_i & ~pll_reset_i & csr.serdes_cfg.en & csr.pll_cfg0[0];
-    pll_clk_run        = pll_locked | (pll_enabled & csr.pll_cfg0[9]);
-    reset_core_pll_n_o = pll_locked & reset_n_i;
-  end
+  // the PLL state: continuous assignments, no procedure, so no order
+  assign pll_enabled        = reset_n_i & ~pll_reset_i & csr.serdes_cfg.en & csr.pll_cfg0[0];
+  assign pll_clk_run        = pll_locked | (pll_enabled & csr.pll_cfg0[9]);
+  assign reset_core_pll_n_o = pll_locked & reset_n_i;
 
-  // Lock BHV_PLL_LOCK_TIME_NS after the PLL turns on, by level: a zero-width
-  // off-on glitch is no restart, a real one restarts the lock time
+  // Lock BHV_PLL_LOCK_TIME_NS after the PLL turns on, at the first rise of
+  // CLK_REF_I from then on; by level: a zero-width off-on glitch is no
+  // restart, a real one restarts the lock time. One process, no fork, no
+  // delay; pll_locked starts low as declared.
   always begin : pll_lock_seq
-    bit done;
-    pll_locked = LO;
+    real t0;
     wait (pll_enabled);
     pll_cfg1_check(csr.pll_cfg1);
-    done = FALSE;
-    fork
-      begin
-        #(BHV_PLL_LOCK_TIME_NS * 1ns);
-        done = TRUE;
-      end
-      wait (!pll_enabled);
-    join_any
-    disable fork;
-    if (done && pll_enabled) begin
+    t0 = now_ns();
+    while (pll_enabled && ((now_ns() - t0) < BHV_PLL_LOCK_TIME_NS - 0.001)) begin
+      @(posedge clk_ref_i or negedge pll_enabled);
+    end
+    if (pll_enabled) begin
       pll_locked = HI;
       if (BHV_VERBOSE) begin
         $display("[%0t] %m: PLL locked, line rate %.3f Gb/s, PLL clk %.3f MHz", $time,
                  1.0 / ui, 1000.0 / pll_period);
       end
       wait (!pll_enabled);
+      pll_locked = LO;
     end
   end
 
@@ -787,21 +783,27 @@ module ccfpga_serdes
     rx_core_rst_n = reset_core_pll_n_o & reset_core_rx_n_i;
   end
 
-  task automatic rst_clks(int n);
-    repeat (n) @(posedge clk_core_pll_o);
+  // One process per side, no fork: each clock wait also ends at the core
+  // reset (ok = FALSE), on RX also at RX_RESET_I (a restart). n clocks:
+  task automatic tx_clks(int n, inout bit ok);
+    while (ok && (n > 0)) begin
+      @(posedge clk_core_pll_o or negedge tx_core_rst_n);
+      ok = tx_core_rst_n;
+      n--;
+    end
   endtask
 
   // a TX stage, s = 0 PMA, 1 PCS
-  task automatic tx_rst_stage(int s);
+  task automatic tx_rst_stage(int s, inout bit ok);
     if (s == 0) begin
       tx_pma_rst_n = LO;
-      rst_clks(int'(TX_PMA_RESET_TIME) + 1);
-      tx_pma_rst_n = HI;
+      tx_clks(int'(TX_PMA_RESET_TIME) + 1, ok);
+      if (ok) tx_pma_rst_n = HI;
     end
     else begin
       tx_pcs_rst_n = LO;
-      rst_clks(int'(TX_PCS_RESET_TIME) + 1);
-      tx_pcs_rst_n = HI;
+      tx_clks(int'(TX_PCS_RESET_TIME) + 1, ok);
+      if (ok) tx_pcs_rst_n = HI;
     end
   endtask
 
@@ -809,43 +811,54 @@ module ccfpga_serdes
   /* verilator lint_off WAITCONST */
   always begin : tx_reset_seq
     int first, extra;
+    bit ok;
     tx_resetdone_o = LO;
     tx_pma_rst_n   = LO;
     tx_pcs_rst_n   = LO;
     wait (tx_core_rst_n);
-    fork
-      begin
-        first = 0;
-        extra = 4;
-        forever begin
-          while (tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i) begin  // held
-            if (tx_reset_i | tx_pma_reset_i) begin
-              first = 0;
-            end
-            // the release, or a full reset over a PCS-only one; a level wait,
-            // not @(...): Vivado XSIM 2026.1 dies on that event control here
-            wait (!(tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i) ||
-                  ((tx_reset_i | tx_pma_reset_i) && (first != 0)));
-          end
-          rst_clks(3 + extra);
-          for (int s = first; s < 2; s++) begin
-            tx_rst_stage(s);
-          end
-          rst_clks(4);
+    first = 0;
+    extra = 4;
+    while (tx_core_rst_n) begin
+      if (tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i) begin  // held
+        if (tx_reset_i | tx_pma_reset_i) begin
+          first = 0;
+        end
+        // the release, or a full reset over a PCS-only one; a level wait,
+        // not @(...): Vivado XSIM 2026.1 died on that event control in a fork
+        wait (!(tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i) ||
+              ((tx_reset_i | tx_pma_reset_i) && (first != 0)) || !tx_core_rst_n);
+      end
+      else begin
+        ok = TRUE;
+        tx_clks(3 + extra, ok);
+        for (int s = first; ok && (s < 2); s++) begin
+          tx_rst_stage(s, ok);
+        end
+        tx_clks(4, ok);
+        if (ok) begin
           tx_resetdone_o <= HI;
-          wait (tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i);
+          wait (tx_reset_i | tx_pma_reset_i | tx_pcs_reset_i | !tx_core_rst_n);
+        end
+        if (tx_core_rst_n) begin
           tx_resetdone_o = LO;
           first          = 1;
           extra          = 0;
         end
       end
-    join_none
-    @(negedge tx_core_rst_n);
-    disable fork;
+    end
   end
 
+  // RX: a run starts with RX_RESET_I low, so RX_RESET_I high is its rise
+  task automatic rx_clks(int n, inout bit ok);
+    while (ok && (n > 0)) begin
+      @(posedge clk_core_pll_o or negedge rx_core_rst_n or posedge rx_reset_i);
+      ok = rx_core_rst_n & ~rx_reset_i;
+      n--;
+    end
+  endtask
+
   // an RX stage, s = 0 PMA, 1 EQA, 2 CDR, 3 PCS, 4 BUF
-  task automatic rx_rst_stage(int s);
+  task automatic rx_rst_stage(int s, inout bit ok);
     int n;
     n = int'(RX_PMA_RESET_TIME);
     unique case (s)
@@ -857,11 +870,11 @@ module ccfpga_serdes
     endcase
     n = n * (2 * int'(RX_RESET_TIMER_PRESC) + 1) + 1;
     unique case (s)
-      0: begin rx_pma_rst_n = LO; rst_clks(n); rx_pma_rst_n = HI; end
-      2: begin rx_cdr_rst_n = LO; rst_clks(n); rx_cdr_rst_n = HI; end
-      3: begin rx_pcs_rst_n = LO; rst_clks(n); rx_pcs_rst_n = HI; end
-      4: begin rx_buf_rst_n = LO; rst_clks(n); rx_buf_rst_n = HI; end
-      default: begin rst_clks(n); end  // the equaliser: nothing to reset here
+      0: begin rx_pma_rst_n <= LO; rx_clks(n, ok); if (ok) rx_pma_rst_n <= HI; end
+      2: begin rx_cdr_rst_n <= LO; rx_clks(n, ok); if (ok) rx_cdr_rst_n <= HI; end
+      3: begin rx_pcs_rst_n <= LO; rx_clks(n, ok); if (ok) rx_pcs_rst_n <= HI; end
+      4: begin rx_buf_rst_n <= LO; rx_clks(n, ok); if (ok) rx_buf_rst_n <= HI; end
+      default: begin rx_clks(n, ok); end  // the equaliser: nothing to reset here
     endcase
   endtask
 
@@ -883,67 +896,58 @@ module ccfpga_serdes
   endfunction
 
   // the stages from first; RX_RESETDONE_GATE holds RX_RESET_DONE_O low
-  task automatic rx_rst_run(int first, int extra);
-    rst_clks(3 + extra);
-    for (int s = first; s < 5; s++) begin
+  task automatic rx_rst_run(int first, int extra, inout bit ok);
+    rx_clks(3 + extra, ok);
+    for (int s = first; ok && (s < 5); s++) begin
       if (s == 3) begin
-        while ((RX_WAIT_CDR_LOCK != 0) && !rx_cdr_locked && !near_pcs) begin
-          @(posedge clk_core_pll_o);
+        while (ok && (RX_WAIT_CDR_LOCK != 0) && !rx_cdr_locked && !near_pcs) begin
+          rx_clks(1, ok);
         end
       end
-      rx_rst_stage(s);
+      if (ok) rx_rst_stage(s, ok);
     end
-    rst_clks(4);
-    rx_resetdone_o <= (RX_RESETDONE_GATE == 0);
+    rx_clks(4, ok);
+    if (ok) rx_resetdone_o <= (RX_RESETDONE_GATE == 0);
   endtask
 
   always begin : rx_reset_seq
     int first, extra;
-    bit restart;
+    bit ok;
     rx_resetdone_o = LO;
-    rx_pma_rst_n   = LO;
-    rx_cdr_rst_n   = LO;
-    rx_pcs_rst_n   = LO;
-    rx_buf_rst_n   = LO;
+    rx_pma_rst_n  <= LO;
+    rx_cdr_rst_n  <= LO;
+    rx_pcs_rst_n  <= LO;
+    rx_buf_rst_n  <= LO;
     wait (rx_core_rst_n);
-    fork
-      begin
-        first = 0;
-        extra = 4;
-        forever begin
-          while (rx_rst_port() != 5) begin  // held
-            if (rx_rst_port() < first) begin
-              first = rx_rst_port();
-            end
-            @(rx_reset_i or rx_pma_reset_i or rx_eqa_reset_i or rx_cdr_reset_i or rx_pcs_reset_i
-              or rx_buf_reset_i);
-          end
-          restart = FALSE;
-          fork
-            rx_rst_run(first, extra);
-            begin
-              @(posedge rx_reset_i);
-              restart = TRUE;
-            end
-          join_any
-          disable fork;
-          if (!restart) begin
-            // the signals themselves: a wait does not look into functions
-            wait (rx_reset_i | rx_pma_reset_i | rx_eqa_reset_i | rx_cdr_reset_i | rx_pcs_reset_i
-                  | rx_buf_reset_i);
-          end
+    first = 0;
+    extra = 4;
+    while (rx_core_rst_n) begin
+      if (rx_rst_port() != 5) begin  // held
+        if (rx_rst_port() < first) begin
+          first = rx_rst_port();
+        end
+        @(rx_reset_i or rx_pma_reset_i or rx_eqa_reset_i or rx_cdr_reset_i or rx_pcs_reset_i
+          or rx_buf_reset_i or negedge rx_core_rst_n);
+      end
+      else begin
+        ok = TRUE;
+        rx_rst_run(first, extra, ok);
+        if (ok) begin
+          // the signals themselves: a wait does not look into functions
+          wait (rx_reset_i | rx_pma_reset_i | rx_eqa_reset_i | rx_cdr_reset_i | rx_pcs_reset_i
+                | rx_buf_reset_i | !rx_core_rst_n);
+        end
+        if (rx_core_rst_n) begin  // a port, or a restart
           rx_resetdone_o = LO;
-          rx_pma_rst_n   = HI;
-          rx_cdr_rst_n   = HI;
-          rx_pcs_rst_n   = HI;
-          rx_buf_rst_n   = HI;
+          rx_pma_rst_n  <= HI;
+          rx_cdr_rst_n  <= HI;
+          rx_pcs_rst_n  <= HI;
+          rx_buf_rst_n  <= HI;
           first          = 5;
           extra          = 0;
         end
       end
-    join_none
-    @(negedge rx_core_rst_n);
-    disable fork;
+    end
   end
   /* verilator lint_on WAITCONST */
 
@@ -982,14 +986,10 @@ module ccfpga_serdes
   // PMA, 110 far-end PCS, the rest normal. Near-end PMA needs
   // TX_PMA_LOOPBACK != 0 (DS1001 Table 2.25). Near-end, the TX pins go to
   // the RX (PCS: with no CDR lock wait); far-end, the RX data to the TX.
-  task automatic loopbacks();
-    near_pcs      = (loopback_i == 3'b001);
-    near_loopback = near_pcs || ((loopback_i == 3'b010) && (TX_PMA_LOOPBACK != 0));
-    far_loopback  = (loopback_i == 3'b100) || (loopback_i == 3'b110);
-  endtask
-
-  initial loopbacks();
-  always @(loopback_i) loopbacks();
+  // Continuous assignments: no procedure, so no order with their readers.
+  assign near_pcs      = (loopback_i == 3'b001);
+  assign near_loopback = near_pcs || ((loopback_i == 3'b010) && (TX_PMA_LOOPBACK != 0));
+  assign far_loopback  = (loopback_i == 3'b100) || (loopback_i == 3'b110);
 
   //#########################################################################
   // TX: fabric word in, serial line out
@@ -1391,10 +1391,18 @@ module ccfpga_serdes
   rx_raw_t   rx_word_c;     // the word on the recovered clock
   event      rx_word_done;  // a word went into rx_word_q
 
-  // bit by bit; the outputs take them on CLK_CORE_RX_I (rx_status)
-  bit        rx_aligned;       // RX_BYTE_IS_ALIGNED_O
-  bit        rx_realign_pend;  // RX_BYTE_REALIGN_O: the alignment moved
-  bit        rx_prbs_err_acc;  // RX_PRBS_ERR_O: a word with PRBS errors
+  // bit by bit; the outputs take them on CLK_CORE_RX_I (rx_status), each
+  // through a copy by non-blocking assignment: a bit at the clock edge
+  // waits for the next clock, in any process order. Counts, not flags
+  // rx_status clears: one writer each.
+  bit        rx_aligned;     // RX_BYTE_IS_ALIGNED_O
+  int        rx_realign_n;   // RX_BYTE_REALIGN_O: the alignment moved
+  int        rx_prbs_err_n;  // RX_PRBS_ERR_O: a word with PRBS errors
+  bit        rx_aligned_q;
+  int        rx_realign_q, rx_prbs_err_q;
+  always @(rx_aligned) rx_aligned_q <= rx_aligned;
+  always @(rx_realign_n) rx_realign_q <= rx_realign_n;
+  always @(rx_prbs_err_n) rx_prbs_err_q <= rx_prbs_err_n;
 
   int        rx_bits_seen;
 
@@ -1466,7 +1474,6 @@ module ccfpga_serdes
     rx_prbs_nbits   = 0;
     rx_prbs_wbad    = LO;
     rx_prbs_wnz     = LO;
-    rx_prbs_err_acc = LO;
   endtask
 
   bit  rx_word_started;  // the counters are set, since the last stop
@@ -1545,7 +1552,7 @@ module ccfpga_serdes
           end
           else if (good && ((lanes & COMMA_BAD_LANES) != 8'h00)) begin
             rx_drop_sym     = TRUE;
-            rx_realign_pend = HI;
+            rx_realign_n++;
             rx_al_mode      = AL_HUNT;
             rx_al_cnt       = 0;
             if (BHV_VERBOSE) begin
@@ -1570,7 +1577,7 @@ module ccfpga_serdes
           end
           else if (found && !good) begin
             rx_aligned      = LO;
-            rx_realign_pend = HI;
+            rx_realign_n++;
             rx_al_mode      = AL_HUNT;
             rx_al_cnt       = 0;
             if (BHV_VERBOSE) begin
@@ -1625,7 +1632,7 @@ module ccfpga_serdes
         rx_prbs_synced = rx_prbs_wnz && !rx_prbs_wbad && (rx_prbs_nbits >= 31 + 10 * RX_BYTES);
       end
       else if (rx_prbs_wbad) begin
-        rx_prbs_err_acc = HI;
+        rx_prbs_err_n++;
         if (rx_prbs_err_cnt < 32'h7FFF) begin
           rx_prbs_err_cnt++;
         end
@@ -1758,20 +1765,22 @@ module ccfpga_serdes
   // RX_PRBS_ERR_O (a clock with an error since the clock before), on
   // CLK_CORE_RX_I. RX_BYTE_IS_ALIGNED_O tells of the aligner: it leads the
   // aligned data out by the RX buffer and BHV_RX_PIPE_STAGES.
+  int rx_realign_seen, rx_prbs_err_seen;  // the counts at the last clock
+
   always @(posedge clk_core_rx_i or negedge rx_pcs_rst_n) begin : rx_status
     if (!rx_pcs_rst_n) begin
-      rx_realign_pend       = LO;
-      rx_prbs_err_acc       = LO;
+      rx_realign_seen       = rx_realign_q;
+      rx_prbs_err_seen      = rx_prbs_err_q;
       rx_byte_is_aligned_o <= LO;
       rx_byte_realign_o    <= LO;
       rx_prbs_err_o        <= LO;
     end
     else begin
-      rx_byte_is_aligned_o <= rx_aligned;
-      rx_byte_realign_o    <= rx_realign_pend;
-      rx_prbs_err_o        <= rx_prbs_err_acc;
-      rx_realign_pend       = LO;
-      rx_prbs_err_acc       = LO;
+      rx_byte_is_aligned_o <= rx_aligned_q;
+      rx_byte_realign_o    <= (rx_realign_q != rx_realign_seen);
+      rx_prbs_err_o        <= (rx_prbs_err_q != rx_prbs_err_seen);
+      rx_realign_seen       = rx_realign_q;
+      rx_prbs_err_seen      = rx_prbs_err_q;
     end
   end
 
@@ -1786,12 +1795,18 @@ module ccfpga_serdes
   int  rx_lock_cnt;
   int  rx_bad_cnt;  // edges off the bit grid in a row
   bit  rx_cdr_locked_r;
-  bit  rx_sampler_run;
+  bit  rx_sampler_run;  // for event controls; a level: rx_run_now()
+
+  // the receiver runs: from its inputs, not rx_sampler_run, which another
+  // process sets a delta later
+  function automatic bit rx_run_now();
+    return pll_locked & rx_pma_rst_n & rx_cdr_rst_n & ~rx_ei_filt & rx_powerdown_n_i;
+  endfunction
 
   always @(rx_cdr_locked_r or pll_locked or rx_pma_rst_n or rx_cdr_rst_n or rx_ei_filt or
            rx_powerdown_n_i) begin : rx_run
     rx_cdr_locked  = rx_cdr_locked_r | (RX_CDR_FORCE_LOCK != 0);
-    rx_sampler_run = pll_locked & rx_pma_rst_n & rx_cdr_rst_n & ~rx_ei_filt & rx_powerdown_n_i;
+    rx_sampler_run = rx_run_now();
   end
 
   // a receiver stops: the deserializer and the CDR start over
@@ -1893,8 +1908,9 @@ module ccfpga_serdes
 
   //-------------------------------------------------------------------------
   // CDR_MODEL = FAST: an ideal sampler. Bit centres on a grid of UIs, taken
-  // in bulk at each line edge, or after a word without one (the watchdog,
-  // below). An edge within UI/4 of the grid moves the
+  // in bulk at each line edge, or after a word without one (the timeout).
+  // One process owns both, and all the state below. An edge within UI/4
+  // of the grid moves the
   // grid to it (the CDR, at once); others, like a glitch, do not, until
   // the lock is lost: then the next edge starts a new grid. 8b/10b runs
   // are 5 bits at most, so a word is late by 5 UI at most. At a stop
@@ -1905,8 +1921,7 @@ module ccfpga_serdes
   int  rx_fast_grid_n;         // bits taken since it
   bit  rx_fast_level;          // the line since the last edge
   real rx_fast_x;              // now, in UI since the grid
-  bit  rx_fast_edge;           // an edge since the watchdog's last check
-  bit  rx_fast_prov;           // the grid is the watchdog's, not an edge's
+  bit  rx_fast_prov;           // the grid is the timeout's, not an edge's
 
   // the bits whose centres lie before now
   task automatic rx_fast_take();
@@ -1920,74 +1935,100 @@ module ccfpga_serdes
     rx_fast_grid_n = n;
   endtask
 
-  always @(rx_pad_p or negedge rx_sampler_run) begin : rx_fast_sampler
-    real x;
-    if (CDR_MODEL == FAST) begin
-      if (!rx_sampler_run) begin
-        if ((rx_fast_grid_t >= 0.0) && (ui > 0.0)) begin
-          rx_fast_take();
-        end
-        rx_fast_grid_t = -1.0;
-        rx_fast_prov   = FALSE;
-        rx_stop();
-      end
-      else if (ui > 0.0) begin
-        if (rx_fast_grid_t >= 0.0) begin
-          rx_fast_take();
-          x = rx_fast_x;
-          if (rx_fast_prov) begin  // the watchdog's grid: the first edge sets it
-            rx_fast_grid_t = now_ns();
-            rx_fast_grid_n = 0;
-            rx_fast_prov   = FALSE;
-          end
-          else if ((x - $floor(x + 0.5) < 0.25) && (x - $floor(x + 0.5) > -0.25)) begin
-            rx_fast_grid_t = now_ns();
-            rx_fast_grid_n = 0;
-            rx_lock_count();
-          end
-          else begin
-            rx_bad_edge();
-            if (!rx_cdr_locked_r && (rx_bad_cnt >= BHV_CDR_LOCK_EDGES)) begin
-              rx_fast_grid_t = now_ns();  // lost: a new grid from here
-              rx_fast_grid_n = 0;
-              rx_bad_cnt     = 0;
-            end
-          end
-        end
-        else begin
-          rx_fast_grid_t = now_ns();
-          rx_fast_grid_n = 0;
-        end
-        rx_fast_level = rx_pad_p;
-        rx_fast_edge  = HI;
-      end
+  // a stop: the bits up to now, then the receiver starts over
+  task automatic rx_fast_stop();
+    if ((rx_fast_grid_t >= 0.0) && (ui > 0.0)) begin
+      rx_fast_take();
     end
-  end
+    rx_fast_grid_t = -1.0;
+    rx_fast_prov   = FALSE;
+    rx_stop();
+  endtask
 
-  // A line without edges for a word: the bits up to now, as ACCURATE's
-  // sampler takes them, so the recovered clock runs on and the RX buffer
-  // doesn't underflow. With no grid yet (a start on a still line), one from
-  // the window's start, until the first edge. A peer TX in reset can put
-  // out such a line.
-  initial if (CDR_MODEL == FAST) begin : rx_fast_watchdog
-    real t0;
-    forever begin
-      if (rx_sampler_run && (ui > 0.0)) begin
-        rx_fast_edge = LO;
-        t0           = now_ns();
-        #(10 * RX_BYTES * ui * 1ns);
-        if (!rx_fast_edge && rx_sampler_run) begin
-          if (rx_fast_grid_t < 0.0) begin
-            rx_fast_grid_t = t0;
-            rx_fast_grid_n = 0;
-            rx_fast_level  = rx_pad_p;
-            rx_fast_prov   = TRUE;
-          end
-          rx_fast_take();
-        end
+  // a line edge: the bits up to it, then the grid (the CDR)
+  task automatic rx_fast_edge();
+    real x;
+    if (rx_fast_grid_t >= 0.0) begin
+      rx_fast_take();
+      x = rx_fast_x;
+      if (rx_fast_prov) begin  // the timeout's grid: the first edge sets it
+        rx_fast_grid_t = now_ns();
+        rx_fast_grid_n = 0;
+        rx_fast_prov   = FALSE;
+      end
+      else if ((x - $floor(x + 0.5) < 0.25) && (x - $floor(x + 0.5) > -0.25)) begin
+        rx_fast_grid_t = now_ns();
+        rx_fast_grid_n = 0;
+        rx_lock_count();
       end
       else begin
-        @(rx_sampler_run or pll_locked);
+        rx_bad_edge();
+        if (!rx_cdr_locked_r && (rx_bad_cnt >= BHV_CDR_LOCK_EDGES)) begin
+          rx_fast_grid_t = now_ns();  // lost: a new grid from here
+          rx_fast_grid_n = 0;
+          rx_bad_cnt     = 0;
+        end
+      end
+    end
+    else begin
+      rx_fast_grid_t = now_ns();
+      rx_fast_grid_n = 0;
+    end
+    rx_fast_level = rx_pad_p;
+  endtask
+
+  // still since t0 for a word: half a UI short of it, so the times'
+  // rounding can't decide
+  function automatic bit rx_fast_still(real t0);
+    return (now_ns() - t0) >= (10 * RX_BYTES - 0.5) * ui;
+  endfunction
+
+  // A line without edges for a word: the bits up to now, as ACCURATE's sampler takes them, so the recovered
+  // clock runs on and the RX buffer doesn't underflow. With no grid yet (a
+  // start on a still line), one from t0, until the first edge. A peer TX in
+  // reset can put out such a line.
+  task automatic rx_fast_quiet(real t0);
+    if (rx_fast_grid_t < 0.0) begin
+      rx_fast_grid_t = t0;
+      rx_fast_grid_n = 0;
+      rx_fast_level  = rx_pad_p;
+      rx_fast_prov   = TRUE;
+    end
+    rx_fast_take();
+  endtask
+
+  // The receiver, one process: a line edge, a start or stop, and the
+  // timeout, with no fork and no delay. The timeout is PLL_CLK_O: at each
+  // rise, a line still for a word (t0: the last edge or the start) gives
+  // its bits. An edge after such a still line gives them first too, so an
+  // edge and a rise at the same time end the same in either order.
+  initial if (CDR_MODEL == FAST) begin : rx_fast_rx
+    real t0;
+    bit  lvl, ran;
+    ran = FALSE;
+    forever begin
+      @(rx_pad_p or rx_sampler_run or posedge clk_core_pll_o);
+      if (!rx_sampler_run || (ui <= 0.0)) begin
+        if (ran) begin
+          rx_fast_stop();
+          ran = FALSE;
+        end
+      end
+      else if (!ran) begin  // a start
+        ran = TRUE;
+        t0  = now_ns();
+        lvl = rx_pad_p;
+      end
+      else if (rx_pad_p != lvl) begin  // an edge
+        if ((rx_fast_grid_t < 0.0) && rx_fast_still(t0)) begin
+          rx_fast_quiet(t0);
+        end
+        rx_fast_edge();
+        lvl = rx_pad_p;
+        t0  = now_ns();
+      end
+      else if (rx_fast_still(t0)) begin  // a PLL_CLK_O rise on a still line
+        rx_fast_quiet(t0);
       end
     end
   end
@@ -2121,11 +2162,9 @@ module ccfpga_serdes
     int  p, n;
     real tail;
     bit  ended;
-    fork
-      wait ((near_loopback ? cdr_none.my_id : cdr_none.peer_id) >= 0);
-      #20.0ns;
-    join_any
-    disable fork;
+    // enumeration ends by 10.5 ns, the first word comes after the PLL lock
+    // (BHV_PLL_LOCK_TIME_NS, 500 ns): one wait, no fork
+    #20.0ns;
     if (!cdr_none_valid(rx_none_peer())) begin
       $warning("%m: CDR_MODEL = NONE, but no peer: is the far end NONE too?");
     end
@@ -2136,6 +2175,8 @@ module ccfpga_serdes
       n     = cdr_none_words[p];
       tail  = rx_none_word_t + (10.0 * RX_BYTES + 0.5) * ui - now_ns();
       ended = FALSE;
+      // the next word, or the end of this one: a fork, as the end is half a
+      // UI after the word, finer than any clock here
       fork
         begin
           @(cdr_none_words[p] or near_loopback or posedge rx_sampler_run);
@@ -2190,7 +2231,7 @@ module ccfpga_serdes
   bit     rx_idle_run = FALSE;
 
   always begin : rx_rec_clk_gen
-    if (!(pll_locked && (core_period > 0.0) && (rx_word_q.size() == 0) && !(rx_sampler_run && (ui > 0.0)))) begin
+    if (!(pll_locked && (core_period > 0.0) && (rx_word_q.size() == 0) && !(rx_run_now() && (ui > 0.0)))) begin
       rx_idle_run = FALSE;
     end
     if (rx_word_q.size() != 0) begin
@@ -2206,7 +2247,7 @@ module ccfpga_serdes
         #(ui * 1ns);  // a word waits: a short low phase
       end
     end
-    else if (rx_sampler_run && (ui > 0.0)) begin
+    else if (rx_run_now() && (ui > 0.0)) begin
       @(rx_word_done or negedge rx_sampler_run);
     end
     else if (pll_locked && (core_period > 0.0)) begin
@@ -2318,32 +2359,37 @@ module ccfpga_serdes
 
   localparam int EB_DEPTH = 64 + 8;  // 64 words, and those still crossing
 
-  // RX_BUF_RESET: on at once, off 2 clocks later on each side
+  // RX_BUF_RESET: on at once, off 2 clocks later on each side. One process
+  // each, no fork: the clock wait also ends at a new buffer reset.
   always begin : eb_w_rst_seq
+    int n;
     eb_w_rst_n = LO;
     wait (rx_buf_rst_n);
-    fork
-      begin
-        repeat (2) @(posedge clk_core_rx_o);
-        eb_w_rst_n <= HI;
-      end
-    join_none
-    @(negedge rx_buf_rst_n);
-    disable fork;
+    n = 0;
+    while (rx_buf_rst_n && (n < 2)) begin
+      @(posedge clk_core_rx_o or negedge rx_buf_rst_n);
+      n++;
+    end
+    if (rx_buf_rst_n) begin
+      eb_w_rst_n <= HI;
+      @(negedge rx_buf_rst_n);
+    end
   end
 
   always begin : eb_r_rst_seq
+    int n;
     eb_r_rst_n = LO;
     wait (rx_buf_rst_n);
-    fork
-      begin
-        repeat (2) @(posedge clk_core_rx_i);
-        eb_r_rst_n <= HI;
-        chk_stop(rx_buf_cfg_errors(csr.rx_buf_cfg), "RX_BUF_CFG");
-      end
-    join_none
-    @(negedge rx_buf_rst_n);
-    disable fork;
+    n = 0;
+    while (rx_buf_rst_n && (n < 2)) begin
+      @(posedge clk_core_rx_i or negedge rx_buf_rst_n);
+      n++;
+    end
+    if (rx_buf_rst_n) begin
+      eb_r_rst_n <= HI;
+      chk_stop(rx_buf_cfg_errors(csr.rx_buf_cfg), "RX_BUF_CFG");
+      @(negedge rx_buf_rst_n);
+    end
   end
 
   // MIN after a buffer reset, and the clock-correction sequence
@@ -2622,34 +2668,64 @@ module ccfpga_serdes
   // Receiver detection
   //#########################################################################
 
-  // TX_DETECT_RX_I high for BHV_RX_DETECT_TIME_NS: done, with the far end
-  // present or not; low: both clear
-  initial begin : rx_detect
-    forever begin
-      @(posedge tx_detect_rx_i);
-      fork
-        begin
-          #(BHV_RX_DETECT_TIME_NS * 1ns);
-          rx_present_o     = (BHV_RX_PRESENT != 0);
-          rx_detect_done_o = HI;
+  // As the vendor model, clock for clock: TX_DETECT_RX_I through 2
+  // CLK_CORE_TX_I flops and 2 CLK_REF_I sync flops; its rise starts 112
+  // CLK_REF_I clocks (electrical idle 10, detect 90, sample 1, hold 1, quiet
+  // 10), the far end sampled at clock 101. DONE then holds until the next
+  // rise, PRESENT until the next sample; a low request neither aborts nor
+  // clears. Both out through 3 CLK_CORE_RX_I flops. Flops: no fork, no delay.
+  bit [1:0] det_tx_q;                 // CLK_CORE_TX_I
+  bit [2:0] det_ref_q;                // CLK_REF_I: 2 sync flops, the edge detect
+  bit [6:0] det_left;                 // CLK_REF_I clocks left; 0: idle or done
+  bit       det_done, det_present;
+  bit [1:0] det_done_q, det_present_q;  // CLK_CORE_RX_I sync, then the port flop
+
+  always @(posedge clk_core_tx_i or negedge reset_core_tx_n_i) begin : rx_detect_in
+    if (!reset_core_tx_n_i) det_tx_q <= '0;
+    else                    det_tx_q <= {det_tx_q[0], tx_detect_rx_i === HI};
+  end
+
+  always @(posedge clk_ref_i or negedge reset_n_i) begin : rx_detect_fsm
+    if (!reset_n_i) begin
+      det_ref_q   <= '0;
+      det_left    <= '0;
+      det_done    <= LO;
+      det_present <= LO;
+    end else begin
+      det_ref_q <= {det_ref_q[1:0], det_tx_q[1]};
+      if (det_left == 0) begin
+        if (det_ref_q[1] && !det_ref_q[2]) begin
+          det_left <= 7'd112;
+          det_done <= LO;
+        end
+      end else begin
+        det_left <= det_left - 7'd1;
+        if (det_left == 7'd12) det_present <= (BHV_RX_PRESENT != 0);
+        if (det_left == 7'd1) begin
+          det_done <= HI;
           if (BHV_VERBOSE) begin
-            $display("[%0t] %m: receiver detect done, present=%b", $time, rx_present_o);
+            $display("[%0t] %m: receiver detect done, present=%b", $time, det_present);
           end
         end
-      join_none
-      @(negedge tx_detect_rx_i);
-      disable fork;
-      rx_detect_done_o = LO;
-      rx_present_o     = LO;
+      end
     end
   end
 
-  task automatic scan();
-    scan_out_o = scan_enable_i ? scan_in_i : 7'h0;
-  endtask
+  always @(posedge clk_core_rx_i or negedge reset_core_rx_n_i) begin : rx_detect_out
+    if (!reset_core_rx_n_i) begin
+      {det_done_q, det_present_q}       <= '0;
+      {rx_detect_done_o, rx_present_o}  <= '0;
+    end else begin
+      det_done_q       <= {det_done_q[0], det_done};
+      det_present_q    <= {det_present_q[0], det_present};
+      rx_detect_done_o <= det_done_q[1];
+      rx_present_o     <= det_present_q[1];
+    end
+  end
 
-  initial scan();
-  always @(scan_enable_i or scan_in_i) scan();
+  // a continuous assignment: an initial plus an always could miss a change
+  // at time 0 (the always not waiting yet)
+  assign scan_out_o = scan_enable_i ? scan_in_i : 7'h0;
 
 endmodule
 

@@ -44,8 +44,12 @@
 //   chip and the BFM for simulation, with no `ifdef SYNTHESIS.
 //
 //   No logic: names only.
-//   - Parameters: as CC_SERDES, with its defaults, so the chip is what a
-//     direct CC_SERDES instance with the same settings gives. Renamed:
+//   - Parameters: the vendor model's, with its defaults and widths (as the
+//     BFM). Six defaults differ from CC_SERDES: RX_EI_BIAS, PLL_SET_OP_LOCK,
+//     PLL_CI, PLL_CP, RX_CDR_CKP, RX_CDR_LOCK_CFG. RX_CDR_LOCK_CFG and
+//     RX_DBG_SEL are wider: CC_SERDES takes the low bits. The HM-only TX
+//     driver sets for electrical idle and receiver detection copy the main
+//     set, as the vendor model's register file does. Renamed:
 //     ALIGN_* (RX_ALIGN_* on CC_SERDES), RX_RESETDONE_GATE
 //     (RX_RESET_DONE_GATE), the four RX_*_OVR (RX_EN_EQA_EXT_VALUE).
 //     TX_BUFFER_ADDR_WIDTH has no CC_SERDES parameter.
@@ -87,9 +91,9 @@ module ccfpga_serdes #(
     parameter logic [ 2:0] RX_AFE_VCMSEL            = 4,
     parameter logic [ 3:0] RX_AFE_GAIN              = 8,
     parameter logic [ 4:0] RX_AFE_PEAK              = 16,
-    parameter logic [ 7:0] RX_CDR_CKP               = 8'hF8,
+    parameter logic [ 7:0] RX_CDR_CKP               = 8'hAF,  // vendor model; CC_SERDES 8'hF8
     parameter logic [ 7:0] RX_CDR_CKI               = 0,
-    parameter logic [ 7:0] RX_CDR_LOCK_CFG          = 8'hD5,
+    parameter logic [14:0] RX_CDR_LOCK_CFG          = 15'h08D5,  // vendor model; CC_SERDES has [7:0]
     parameter logic [ 1:0] RX_CDR_SET_ACC_CONFIG    = 0,
     parameter logic [ 0:0] RX_CDR_FORCE_LOCK        = 0,
     parameter logic [14:0] RX_CDR_FREQ_ACC          = 0,
@@ -101,7 +105,7 @@ module ccfpga_serdes #(
     parameter logic [ 1:0] RX_SLIDE_MODE            = 0,
     parameter logic [14:0] RX_EYE_MEAS_CFG          = 0,
     parameter logic [ 5:0] RX_MON_PH_OFFSET         = 0,
-    parameter logic [ 3:0] RX_EI_BIAS               = 0,
+    parameter logic [ 3:0] RX_EI_BIAS               = 4,  // vendor model, DS1001; CC_SERDES 0, the detector off
     parameter logic [ 3:0] RX_EI_BW_SEL             = 4,
     parameter logic [ 0:0] RX_BUF_BYPASS            = 0,
     parameter logic [ 0:0] RX_CLKCOR_USE            = 0,
@@ -113,7 +117,7 @@ module ccfpga_serdes #(
     parameter logic [ 5:0] RX_CLKCOR_MAX_LAT        = 39,
     parameter logic [ 1:0] RX_DATAPATH_SEL          = 3,
     parameter logic [ 5:0] RX_DBG_SRAM_DELAY        = 6'h05,
-    parameter logic [ 1:0] RX_DBG_SEL               = 0,
+    parameter logic [ 3:0] RX_DBG_SEL               = 0,  // vendor model, DS1001 0x2D [4:1]; Yosys CC_SERDES has [1:0]
     parameter logic [ 0:0] RX_DBG_MODE              = 0,
     parameter logic [ 4:0] TX_SEL_PRE               = 0,
     parameter logic [ 4:0] TX_SEL_POST              = 0,
@@ -139,7 +143,7 @@ module ccfpga_serdes #(
     parameter logic [ 0:0] SERDES_AUTO_INIT         = 0,
     parameter logic [ 0:0] PLL_EN_ADPLL_CTRL        = 0,
     parameter logic [ 0:0] PLL_CONFIG_SEL           = 0,
-    parameter logic [ 0:0] PLL_SET_OP_LOCK          = 0,
+    parameter logic [ 0:0] PLL_SET_OP_LOCK          = 1,  // vendor model; CC_SERDES 0
     parameter logic [ 0:0] PLL_ENFORCE_LOCK         = 0,
     parameter logic [ 0:0] PLL_DISABLE_LOCK         = 0,
     parameter logic [ 0:0] PLL_LOCK_WINDOW          = 1,
@@ -152,8 +156,8 @@ module ccfpga_serdes #(
     parameter logic [ 5:0] PLL_FCNTRL               = 58,
     parameter logic [ 5:0] PLL_MAIN_DIVSEL          = 27,
     parameter logic [ 1:0] PLL_OUT_DIVSEL           = 0,
-    parameter logic [ 4:0] PLL_CI                   = 3,
-    parameter logic [ 9:0] PLL_CP                   = 80,
+    parameter logic [ 4:0] PLL_CI                   = 1,  // vendor model; CC_SERDES 3
+    parameter logic [ 9:0] PLL_CP                   = 60,  // vendor model; CC_SERDES 80
     parameter logic [ 3:0] PLL_AO                   = 0,
     parameter logic [ 2:0] PLL_SCAP                 = 0,
     parameter logic [ 0:0] PLL_SCAP_AUTO_CAL        = 1,
@@ -308,7 +312,7 @@ module ccfpga_serdes #(
       .RX_AFE_PEAK              (RX_AFE_PEAK),
       .RX_CDR_CKP               (RX_CDR_CKP),
       .RX_CDR_CKI               (RX_CDR_CKI),
-      .RX_CDR_LOCK_CFG          (RX_CDR_LOCK_CFG),
+      .RX_CDR_LOCK_CFG          (RX_CDR_LOCK_CFG[7:0]),
       .RX_CDR_SET_ACC_CONFIG    (RX_CDR_SET_ACC_CONFIG),
       .RX_CDR_FORCE_LOCK        (RX_CDR_FORCE_LOCK),
       .RX_CDR_FREQ_ACC          (RX_CDR_FREQ_ACC),
@@ -332,7 +336,7 @@ module ccfpga_serdes #(
       .RX_CLKCOR_MAX_LAT        (RX_CLKCOR_MAX_LAT),
       .RX_DATAPATH_SEL          (RX_DATAPATH_SEL),
       .RX_DBG_SRAM_DELAY        (RX_DBG_SRAM_DELAY),
-      .RX_DBG_SEL               (RX_DBG_SEL),
+      .RX_DBG_SEL               (RX_DBG_SEL[1:0]),
       .RX_DBG_MODE              (RX_DBG_MODE),
       .TX_SEL_PRE               (TX_SEL_PRE),
       .TX_SEL_POST              (TX_SEL_POST),
@@ -393,7 +397,34 @@ module ccfpga_serdes #(
       .PLL_BISC_DLY_PFD_MON_REF (PLL_BISC_DLY_PFD_MON_REF),
       .PLL_BISC_DLY_PFD_MON_DIV (PLL_BISC_DLY_PFD_MON_DIV),
       .PLL_BISC_COR_DLY         (PLL_BISC_COR_DLY),
-      .RX_EN_EQA_EXT_VALUE      ({RX_AFE_OFFSET_OVR, RX_TAPW_OVR, RX_TH_MON2_OVR, RX_TH_MON1_OVR})
+      .RX_EN_EQA_EXT_VALUE      ({RX_AFE_OFFSET_OVR, RX_TAPW_OVR, RX_TH_MON2_OVR, RX_TH_MON1_OVR}),
+      // HM only, as the vendor model: the TX driver sets for electrical
+      // idle (_EI) and receiver detection (_RXDET) copy the main set. Unset,
+      // nextpnr gives TX_DC_ENABLE_RXDET 0 (DS1001: 63): detection off
+      .TX_SEL_PRE_EI            (TX_SEL_PRE),
+      .TX_SEL_POST_EI           (TX_SEL_POST),
+      .TX_AMP_EI                (TX_AMP),
+      .TX_BRANCH_EN_PRE_EI      (TX_BRANCH_EN_PRE),
+      .TX_BRANCH_EN_MAIN_EI     (TX_BRANCH_EN_MAIN),
+      .TX_BRANCH_EN_POST_EI     (TX_BRANCH_EN_POST),
+      .TX_TAIL_CASCODE_EI       (TX_TAIL_CASCODE),
+      .TX_DC_ENABLE_EI          (TX_DC_ENABLE),
+      .TX_DC_OFFSET_EI          (TX_DC_OFFSET),
+      .TX_CM_RAISE_EI           (TX_CM_RAISE),
+      .TX_CM_THRESHOLD_0_EI     (TX_CM_THRESHOLD_0),
+      .TX_CM_THRESHOLD_1_EI     (TX_CM_THRESHOLD_1),
+      .TX_SEL_PRE_RXDET         (TX_SEL_PRE),
+      .TX_SEL_POST_RXDET        (TX_SEL_POST),
+      .TX_AMP_RXDET             (TX_AMP),
+      .TX_BRANCH_EN_PRE_RXDET   (TX_BRANCH_EN_PRE),
+      .TX_BRANCH_EN_MAIN_RXDET  (TX_BRANCH_EN_MAIN),
+      .TX_BRANCH_EN_POST_RXDET  (TX_BRANCH_EN_POST),
+      .TX_TAIL_CASCODE_RXDET    (TX_TAIL_CASCODE),
+      .TX_DC_ENABLE_RXDET       (TX_DC_ENABLE),
+      .TX_DC_OFFSET_RXDET       (TX_DC_OFFSET),
+      .TX_CM_RAISE_RXDET        (TX_CM_RAISE),
+      .TX_CM_THRESHOLD_0_RXDET  (TX_CM_THRESHOLD_0),
+      .TX_CM_THRESHOLD_1_RXDET  (TX_CM_THRESHOLD_1)
   ) u_serdes (
       .REGFILE_CLK_I          (clk_reg_i),
       .TX_CLK_I               (clk_core_tx_i),

@@ -47,7 +47,7 @@ module tb_rules #(
   logic [15:0] cfg_di = '0;
   logic tx_rst = 1'b0, tx_pcs = 1'b0, rx_rst = 1'b0, rx_eqa = 1'b0, rx_pcs = 1'b0, rx_buf = 1'b0;
   logic [2:0] lb = 3'b000;
-  logic txpd = 1'b1, rxpd = 1'b1, tx_ei = 1'b0;
+  logic txpd = 1'b1, rxpd = 1'b1, tx_ei = 1'b0, det = 1'b0, det_done, det_present;
   logic [2:0] tx_prbs = 3'b000, rx_prbs = 3'b000;
   logic prbs_cnt_rst = 1'b0;
   logic ei_det = 1'b0, comma_en = 1'b1, slide = 1'b0, mcomma = 1'b1, pcomma = 1'b1;
@@ -75,39 +75,68 @@ module tb_rules #(
   end : _own_clk
   /* verilator lint_on ZERODLY */
 
-  logic clk_tx;
-  always_comb clk_tx = (use_own ? own_clk : clk_pll) & ~stop_tx;
+  // continuous assignments, not always_comb: no procedure, so no order
+  wire clk_tx = (use_own ? own_clk : clk_pll) & ~stop_tx;
 
   // the line: the TX pins after wd ns; cut: constant
   real wd = 2.0;
   logic rxp_w, rxn_w, cut = 1'b0;
 
-  // a transport delay: each pin change wd later (Verilator 5.052 drops a
-  // non-blocking assignment with a variable intra-assignment delay)
+  // A transport delay: each change of the TX pins wd later, in order. A
+  // queue, one process, no fork: two changes in one time step arrive in
+  // the order sent. If wd shrinks, the changes due earlier wait for the
+  // last one queued, as on a shorter line (bits lost: a slip back).
+  // Two queues, not one of a struct {t, v}: Icarus 14 has no unpacked
+  // struct (a real field) and no queue of a packed struct. Not
+  // rxp_w <= #(wd * 1ns) txp: XSIM 2026.1 dies on it here (double free).
+  real        line_t[$];  // when each change arrives, ns
+  logic [1:0] line_v[$];  // {P, N} at the change
+  int         line_n;     // the queue's size, for the wait
+  initial forever begin : _line_in
+    real t;
+    @(txp or txn);
+    t = now_ns() + wd;
+    if ((line_t.size() > 0) && (line_t[line_t.size()-1] > t)) t = line_t[line_t.size()-1];
+    line_t.push_back(t);
+    line_v.push_back({txp, txn});
+    line_n++;
+  end : _line_in
   /* verilator lint_off ZERODLY */
-  task automatic line_late(logic p, logic n);
-    #(wd * 1ns);
-    rxp_w = p;
-    rxn_w = n;
-  endtask
+  initial begin : _line_out
+    {rxp_w, rxn_w} = 2'b01;
+    forever begin
+      wait (line_n > 0);
+      #((line_t[0] - now_ns()) * 1ns);
+      {rxp_w, rxn_w} = line_v.pop_front();
+      void'(line_t.pop_front());
+      line_n--;
+    end
+  end : _line_out
   /* verilator lint_on ZERODLY */
 
-  initial begin : _line
-    rxp_w = 1'b0;
-    rxn_w = 1'b1;
-    forever begin
-      @(txp or txn);
-      fork
-        line_late(txp, txn);
-      join_none
-    end
-  end : _line
-
-  logic rxp, rxn;
-  always_comb begin
-    rxp = cut ? 1'b0 : rxp_w;
-    rxn = cut ? 1'b1 : rxn_w;
+  // the TX pin states (tx_drive in the BFM): P/N differential, 0/0
+  // (electrical idle, TX not running), 1/1 only in power down; no X or Z.
+  // Checked on each pin change; txpd may change in the same time step.
+  real        txpd_t = 0.0, pins_bad_t = -1.0;
+  int         n_pins_bad = 0;
+  logic [1:0] pins_bad = 2'b00;
+  initial forever begin
+    @(txpd);
+    txpd_t = now_ns();
   end
+  initial forever begin
+    @(txp or txn);
+    if ((now_ns() > 0.0) && (((^{txp, txn}) === 1'bx) || (txp && txn && txpd && (txpd_t != now_ns())))) begin
+      n_pins_bad++;
+      if (pins_bad_t < 0.0) begin
+        pins_bad_t = now_ns();
+        pins_bad   = {txp, txn};
+      end
+    end
+  end
+
+  wire rxp = cut ? 1'b0 : rxp_w;
+  wire rxn = cut ? 1'b1 : rxn_w;
 
   ccfpga_serdes #(
       .RX_DATAPATH_SEL  (2'(DP)),
@@ -155,7 +184,7 @@ module tb_rules #(
       .tx_pcs_reset_i       (tx_pcs),
       .tx_pma_reset_i       (1'b0),
       .tx_elec_idle_i       (tx_ei),
-      .tx_detect_rx_i       (1'b0),
+      .tx_detect_rx_i       (det),
       .tx_prbs_sel_i        (tx_prbs),
       .tx_prbs_force_err_i  (1'b0),
       .tx_powerdown_n_i     (txpd),
@@ -168,8 +197,8 @@ module tb_rules #(
       .tx_char_dispval_i    ('0),
       .tx_buf_err_o         (tx_err),
       .tx_resetdone_o       (txdone),
-      .rx_detect_done_o     (),
-      .rx_present_o         (),
+      .rx_detect_done_o     (det_done),
+      .rx_present_o         (det_present),
       .TERM_SERIO_O         (),
       .rx_reset_i           (rx_rst),
       .rx_pma_reset_i       (1'b0),
@@ -335,18 +364,18 @@ module tb_rules #(
       end
     end : _comma_lane
 
-  real wait_t;
-
-  /* verilator lint_off ZERODLY */
+  // a flag up, or t_ns gone (at a CLK_REF_I rise): one process, no fork
   task wait_aligned(input real t_ns);
-    wait_t = t_ns;
-    fork
-      wait (aligned === 1'b1);
-      #(wait_t * 1ns);
-    join_any
-    disable fork;
+    real t0;
+    t0 = now_ns();
+    while ((aligned !== 1'b1) && ((now_ns() - t0) < t_ns)) @(aligned or posedge clk_ref);
   endtask
-  /* verilator lint_on ZERODLY */
+
+  task wait_tx_err(input real t_ns);
+    real t0;
+    t0 = now_ns();
+    while ((tx_err !== 1'b1) && ((now_ns() - t0) < t_ns)) @(tx_err or posedge clk_ref);
+  endtask
 
   // PLL_CLK_O clocks from now (a port's release) to the rise of done,
   // once it fell: done falls some clocks after the port rose
@@ -602,11 +631,7 @@ module tb_rules #(
     // a slow TX_CLK_I: underflow, sticky, zeros until TX_PCS_RESET_I
     own_half = 17.0;
     use_own  = 1'b1;
-    fork
-      wait (tx_err === 1'b1);
-      #20000ns;
-    join_any
-    disable fork;
+    wait_tx_err(20000.0);
     use_own = 1'b0;
     #2000ns;
     begin
@@ -627,11 +652,7 @@ module tb_rules #(
     // a fast TX_CLK_I: overflow
     own_half = 15.0;
     use_own  = 1'b1;
-    fork
-      wait (tx_err === 1'b1);
-      #40000ns;
-    join_any
-    disable fork;
+    wait_tx_err(40000.0);
     use_own = 1'b0;
     rule("TX overflow: TX_BUF_ERR_O", tx_err === 1'b1, $sformatf("%b", tx_err));
     tx_pcs = 1'b1;
@@ -764,6 +785,32 @@ module tb_rules #(
     #3000ns;
     rule("RX_EI_EN_O low again with data", ei_o === 1'b0, $sformatf("%b", ei_o));
     ei_det = 1'b0;
+    // receiver detection, as the vendor model: 112 CLK_REF_I clocks plus
+    // the syncs (2 core TX, 2 ref, 3 core RX clocks); DONE and PRESENT hold
+    // after the request drops; the next request clears DONE
+    begin
+      real  td;
+      logic p;
+      @(negedge clk_ref);
+      det = 1'b1;
+      td  = now_ns();
+      @(posedge det_done);
+      td = now_ns() - td;
+      p  = det_present;
+      rule("TX_DETECT_RX_I: RX_DETECT_DONE_O after 112 CLK_REF_I clocks and the syncs",
+           (td > 1140.0) && (td < 1400.0), $sformatf("%0.1f ns", td));
+      rule("TX_DETECT_RX_I: a far end present (BHV_RX_PRESENT)", p === 1'b1, $sformatf("%b", p));
+      det = 1'b0;
+      #200ns;
+      rule("TX_DETECT_RX_I low: both hold", {det_done, det_present} === {1'b1, p}, $sformatf(
+           "%b%b", det_done, det_present));
+      det = 1'b1;
+      #200ns;
+      rule("TX_DETECT_RX_I again: DONE clears, PRESENT holds", {det_done, det_present} === {1'b0, p},
+           $sformatf("%b%b", det_done, det_present));
+      det = 1'b0;
+      wait (det_done === 1'b1);
+    end
   endtask
 
   //=======================================================================
@@ -918,6 +965,8 @@ module tb_rules #(
     end else begin
       rules_16();
     end
+    rule("TX pins: P/N, 0/0, or 1/1 in power down; no X or Z", n_pins_bad == 0,
+         (n_pins_bad == 0) ? "0 bad" : $sformatf("%0d bad, the first %b/%b at %0.3f ns", n_pins_bad, pins_bad[1], pins_bad[0], pins_bad_t));
     $display("TB_RULES: DP %0d, SLIDE %0d: %0d rules, %0d failed: %s", DP, SLIDE, n_rules, n_bad,
              (n_bad == 0) ? "PASS" : "FAIL");
     $finish;

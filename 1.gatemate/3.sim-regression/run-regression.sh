@@ -30,13 +30,14 @@ run() {  # name, known issue ("" if none), its log signature, make target and va
     printf '%-16s %4d s  %-38s %s  (%s)\n' "$n" $((SECONDS - t0)) "$*" "$st" "$r"
 }
 
-JANUS_MODES="openCologne #12" JANUS_MODES_SIG="tb_modes.sv:294"
-JANUS_RULES="openCologne #13" JANUS_RULES_SIG="ccfpga_serdes.BFM.sv:440"
+JANUS_MODES="openSERDES_BFM #7" JANUS_MODES_SIG="tb_modes.sv:361"
+JANUS_RULES="" JANUS_RULES_SIG=""
+XSIM_K="openSERDES_BFM #9" XSIM_SIG="FATAL_ERROR"
 
 run formal          "" "" formal "$@"
 run verilator       "" "" sim_modes "$@"            # tb_modes in full, then tb_rules
 run icarus          "" "" sim_icarus "$@"
-run xsim            "" "" sim_xsim "$@"
+run xsim            "$XSIM_K" "$XSIM_SIG" sim_xsim "$@"
 run janushdl-modes  "$JANUS_MODES" "$JANUS_MODES_SIG" sim_janushdl RULES_RUNS= "$@"
 run janushdl-rules  "$JANUS_RULES" "$JANUS_RULES_SIG" sim_janushdl JANUS_MODELS= "$@"
 
