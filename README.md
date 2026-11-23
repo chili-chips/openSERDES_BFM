@@ -204,8 +204,8 @@ TODO
 | JanusHDL | [#7](https://github.com/chili-chips/openSERDES_BFM/issues/7) | 0.21.0: a size cast of an instance parameter, `W'(inst.P)`, at run time (`tb_modes.sv:361`) | open |
 | JanusHDL | [#8](https://github.com/chili-chips/openSERDES_BFM/issues/8) | 0.21.0 feature request: `--race-detect` to tell a harmless `always_comb` re-read from a glitch that reaches an edge | open |
 | Icarus Verilog | [iverilog#1877](https://github.com/steveicarus/iverilog/issues/1877) | 14.0 (devel) feature request: a queue of a packed struct; worked around with `bit [81:0]` ([#10](https://github.com/chili-chips/openSERDES_BFM/issues/10)) | open |
-| Icarus Verilog | [iverilog#1882](https://github.com/steveicarus/iverilog/issues/1882) | feature request: race detection and a process-order portability check | open |
-| Verilator | [verilator#9326](https://github.com/verilator/verilator/issues/9326) | feature request: race detection and a process-order portability check | open |
+| Icarus Verilog | [iverilog#1882](https://github.com/steveicarus/iverilog/issues/1882) | feature request: race detection and a process-order portability check ([#11](https://github.com/chili-chips/openSERDES_BFM/issues/11)) | open |
+| Verilator | [verilator#9326](https://github.com/verilator/verilator/issues/9326) | feature request: race detection and a process-order portability check ([#11](https://github.com/chili-chips/openSERDES_BFM/issues/11)) | open |
 | Verilator | [verilator#9265](https://github.com/verilator/verilator/issues/9265) (our [comment](https://github.com/verilator/verilator/issues/9265#issuecomment-7083237425)) | 5.055: `always @(x)` with `fork ... join_none` does not converge; our case: the fork only reads `x` | open |
 
 JanusHDL has no public tracker (closed source, so it can read encrypted IP): its issues are in our repos, under the [`JanusHDL` label](https://github.com/issues?q=org%3Achili-chips+label%3AJanusHDL).
