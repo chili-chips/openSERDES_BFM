@@ -10,6 +10,8 @@
 #                    PRBS7/31 with forced errors, 5 ms at 3 Gb/s, the random RX word phase;
 #                    then sim_rules
 #   make sim_rules   the BFM's rules (tb_rules, at the ports), Verilator
+#   make sim_ppm     two BFMs a frequency offset apart (tb_ppm), Verilator, ACCURATE:
+#                    the recovered clock holds the data; a local clock overruns the RX buffer
 #   make sim_icarus  tb_modes in Icarus: each CDR_MODEL at 16, 32 and 64 bits,
 #                    ALIGN_COMMA_WORD 01 (even lane) and 11 (lane 0 or 4); then tb_rules
 #   make sim_xsim    Vivado XSIM: tb_modes at 64 bits, each CDR_MODEL; then tb_rules
@@ -49,7 +51,7 @@ LOGS  := $(W)/logs
 TIMESCALE := 1ns/10ps
 ICARUS_TS := $(IW)/timescale.cf
 
-.PHONY: all sim_modes sim_rules sim_icarus sim_xsim sim_janushdl formal waves lint sanity regression clean
+.PHONY: all sim_modes sim_rules sim_ppm sim_icarus sim_xsim sim_janushdl formal waves lint sanity regression clean
 
 all: sim_icarus sim_modes formal
 
@@ -117,6 +119,23 @@ sim_rules: | $(VW) $(LOGS)
 	done
 	@test $$(grep -c "^TB_RULES: .*: PASS$$" $(LOGS)/sim_rules.log) -eq $(words $(RULES_RUNS))
 
+# Two BFMs across a frequency offset (tb_ppm), Verilator, ACCURATE, clock
+# correction off: on B's recovered clock every byte must arrive at +300,
+# -300, -90 and +600 ppm; on B's own PLL clock the RX buffer must give way
+# (RX_BUF_ERR_O): B faster (-1000 ppm, underflow) and slower (+1000 ppm,
+# overflow, 2.5 ms). Runs: ppm:rxclk:run_us
+PPM_RUNS ?= 300:rec:400 -300:rec:400 -90:rec:400 600:rec:400 -1000:local:400 1000:local:2500
+PPM_VLT  := verilator --binary --assert --timing --timescale $(TIMESCALE) -Wall -Wno-DECLFILENAME -Wno-UNUSEDSIGNAL \
+            -Wno-PINCONNECTEMPTY --top-module tb_ppm $(MODEL)/ccfpga_serdes.vlt
+
+sim_ppm: | $(VW) $(LOGS)
+	@$(PPM_VLT) -Mdir $(VW)/ppm +define+CDR_MODEL=ACCURATE $(BFM) tb_ppm.sv > /dev/null
+	@: > $(LOGS)/sim_ppm.log; for r in $(PPM_RUNS); do \
+	  p=$${r%%:*}; c=$${r#*:}; c=$${c%%:*}; us=$${r##*:}; \
+	  $(VW)/ppm/Vtb_ppm +ppm=$$p +rxclk=$$c +run_us=$$us | grep "TB_PPM" | tee -a $(LOGS)/sim_ppm.log; \
+	done
+	@test $$(grep -c "^TB_PPM: .*: PASS" $(LOGS)/sim_ppm.log) -eq $(words $(PPM_RUNS))
+
 # Verilator resolves names after the whole module is read, so a name used
 # before its declaration passes, even with -Wall. Icarus (and the LRM)
 # stop on it. Icarus has no `unique case` checks: its "sorry" notes on them
@@ -125,6 +144,8 @@ sim_rules: | $(VW) $(LOGS)
 # word phase is random (Icarus's fixed seed)
 ICARUS_MODELS ?= NONE FAST ACCURATE
 ICARUS_RUNS   ?= 0:1:0 1:3:0 1:1:1 3:0:0 3:3:3
+# tb_ppm in Icarus: ppm:rxclk:run_us, short (ACCURATE is slow there)
+ICARUS_PPM    ?= -90:rec:100 -1000:local:100
 
 sim_icarus: $(ICARUS_TS) | $(IW) $(LOGS)
 	@L=$(LOGS)/sim_icarus.log; rm -f $$L; for m in $(ICARUS_MODELS); do for r in $(ICARUS_RUNS); do \
@@ -143,8 +164,15 @@ sim_icarus: $(ICARUS_TS) | $(IW) $(LOGS)
 	  test -f $$v; \
 	  vvp -N $$v | $(RULES_GREP) | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $(LOGS)/sim_icarus.log; \
 	done
+	@iverilog -g2012 -c $(ICARUS_TS) -DCDR_MODEL=ACCURATE -o $(IW)/ppm.vvp $(BFM) tb_ppm.sv 2>&1 \
+	  | { grep -v "sorry: Case unique" || true; }
+	@for r in $(ICARUS_PPM); do \
+	  p=$${r%%:*}; c=$${r#*:}; c=$${c%%:*}; us=$${r##*:}; \
+	  vvp -N $(IW)/ppm.vvp +ppm=$$p +rxclk=$$c +run_us=$$us | grep "TB_PPM" | tee -a $(LOGS)/sim_icarus.log; \
+	done
 	@test $$(grep -c "^TB_MODES: .*: PASS$$" $(LOGS)/sim_icarus.log) -eq $(words $(foreach m,$(ICARUS_MODELS),$(ICARUS_RUNS)))
 	@test $$(grep -c "^TB_RULES: .*: PASS$$" $(LOGS)/sim_icarus.log) -eq $(words $(RULES_RUNS))
+	@test $$(grep -c "^TB_PPM: .*: PASS" $(LOGS)/sim_icarus.log) -eq $(words $(ICARUS_PPM))
 
 # Vivado XSIM: tb_modes at 64 bits, comma in lane 0, each CDR_MODEL; then
 # tb_rules. xvlog, xelab and xsim write in the current directory: each run
@@ -240,7 +268,7 @@ waves: $(ICARUS_TS) | $(LOGS)
 
 # Verible on the BFM and the test benches (lint.verible: our rule set)
 VERIBLE_LINT ?= verible-verilog-lint
-LINT_SRC     := $(wildcard $(MODEL)/*.sv) tb_modes.sv tb_rules.sv
+LINT_SRC     := $(wildcard $(MODEL)/*.sv) tb_modes.sv tb_rules.sv tb_ppm.sv
 
 lint:
 	@$(VERIBLE_LINT) --rules_config=lint.verible $(LINT_SRC) && echo "lint: Verible, $(words $(LINT_SRC)) files, clean"

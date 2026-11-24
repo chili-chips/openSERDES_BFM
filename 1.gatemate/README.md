@@ -43,6 +43,7 @@ It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7
 | [`3.sim-regression/run-sanity.sh`](3.sim-regression/run-sanity.sh), [`run-regression.sh`](3.sim-regression/run-regression.sh) | the sanity and regression lists (`make sanity`, `make regression`) |
 | [`3.sim-regression/tb_modes.sv`](3.sim-regression/tb_modes.sv) | one model looped back: the three `CDR_MODEL`s against each other, PRBS, decode table, registers |
 | [`3.sim-regression/tb_rules.sv`](3.sim-regression/tb_rules.sv) | the model's behaviour at its ports, rule by rule, where DS1001 is silent |
+| [`3.sim-regression/tb_ppm.sv`](3.sim-regression/tb_ppm.sv) | two models a frequency offset apart: the recovered clock against a local one |
 | [`1.model/ccfpga_serdes.vlt`](1.model/ccfpga_serdes.vlt) | Verilator: no lint on the model |
 | [`2.formal/`](2.formal) | formal proofs of the 8b/10b codec (`run-formal.sh`) |
 
@@ -225,7 +226,7 @@ If the silicon works the same, three things follow for a protocol:
 2. An insertion repeats the previous word. It is safe only when that word is harmless to repeat: another sequence word, or idle.
 3. The sequence must sit aligned in the datapath word.
 
-PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_CLKCOR_USE = 0` and run from the host's REFCLK. How openCologne's 7.SerDes uses clock correction, and the PCIe details: [clock correction](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/0.doc/clock-correction.md).
+PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_CLKCOR_USE = 0` and run from the host's REFCLK. Silicon agrees: the hard clock correction cannot handle PCIe SKP (Intergalaktik, pci_eerie on GateMate A1, 2026-11-20). Where the host's REFCLK is not available (separate reference clocks, SRNS), the RX data goes on the recovered clock and the SKP clock compensation into the fabric: an elastic buffer that adds or drops SKP symbols ([across a frequency offset](#verification)). How openCologne's 7.SerDes uses clock correction, and the PCIe details: [clock correction](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/0.doc/clock-correction.md).
 
 ### Implementation
 
@@ -298,7 +299,8 @@ nextpnr gives a parameter Yosys did not write its own default: a direct `CC_SERD
 |---|---|---|---|
 | Formal | the 8b/10b codec: disparity, running disparity, comma format, injectivity, run length; exhaustive decode | [`2.formal/`](2.formal/README.md) | 6 of 6 |
 | `sim_modes` | the three `CDR_MODEL`s against each other at 16, 32 and 64 bits, comma in every lane: data bit-exact, latency within 4 UI; PRBS with forced errors; 5 ms at 3 Gb/s; the random word phase; the decode table (all 1024 symbols), comma defaults, register readback, buffer errors. Then `tb_rules` | `make sim_modes` | 38 runs, 9 mode comparisons, 6 `tb_rules` runs: all pass |
-| `sim_icarus` | `tb_modes` and `tb_rules` in Icarus, each `CDR_MODEL`: keeps the model Icarus-clean | same, `make sim_icarus` | 15 + 6 runs, all pass |
+| `sim_ppm` | two models across a frequency offset, `ACCURATE`: data on the recovered clock, the RX buffer on a local one (below) | same, `make sim_ppm` | 6 runs, all pass |
+| `sim_icarus` | `tb_modes`, `tb_rules` and `tb_ppm` in Icarus, each `CDR_MODEL`: keeps the model Icarus-clean | same, `make sim_icarus` | 15 + 6 + 2 runs, all pass |
 | PIPE test | openCologne-PCIE's PHY test, PIPE 64 | openCologne-PCIE, `run-phy.sh pipe64` | pass, 101 checks |
 
 **At 16 and 32 bits, the built-in 8b/10b encoder is not self-sufficient.** On its own it puts wrong disparity on the line; the fabric has to encode, or fix the disparity.
@@ -316,6 +318,17 @@ nextpnr gives a parameter Yosys did not write its own default: a direct `CC_SERD
 IC Link and PCIe PIPE 64 use 64 bits only, so neither is affected.
 
 **A line without edges.** `FAST` takes bits at line edges. A peer whose TX is in reset can hold the line still for a word or more; a watchdog then takes the bits, as `ACCURATE`'s sampler does, so the recovered clock runs on and the RX buffer doesn't underflow.
+
+**Across a frequency offset** (`make sim_ppm`, [`3.sim-regression/tb_ppm.sv`](3.sim-regression/tb_ppm.sv)): two models, A's TX to B's RX, each on its own reference, `ACCURATE`, clock correction off. On B's recovered clock (`RX_CLK_O`) every byte arrives; on B's own PLL clock the phase-only RX buffer drifts and gives way. Results (Verilator, 2026-11-23):
+
+| Offset (B against A) | B's fabric clock | Result |
+|---|---|---|
+| +300, -300, -90, +600 ppm | recovered | 400 us, 100 k bytes, 0 wrong, no buffer error, no realignment |
+| -1000 ppm (B faster) | own PLL | `RX_BUF_ERR_O` 42.7 us after lock: underflow |
+| +1000 ppm (B slower) | own PLL | `RX_BUF_ERR_O` 1815 us after lock: overflow |
+| -90 ppm | own PLL | `RX_BUF_ERR_O` 377 us after lock |
+
+The buffer starts about one word above its underflow limit, so a faster local clock fails first (the start fill is the model's, to check on silicon). A PCIe endpoint with separate reference clocks must take its RX data on the recovered clock and do the SKP clock compensation in the fabric (above).
 
 ### Speed
 

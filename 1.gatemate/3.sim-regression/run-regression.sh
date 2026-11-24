@@ -36,6 +36,7 @@ XSIM_K="openSERDES_BFM #9" XSIM_SIG="FATAL_ERROR"
 
 run formal          "" "" formal "$@"
 run verilator       "" "" sim_modes "$@"            # tb_modes in full, then tb_rules
+run verilator-ppm   "" "" sim_ppm "$@"              # two BFMs a frequency offset apart
 run icarus          "" "" sim_icarus "$@"
 run xsim            "$XSIM_K" "$XSIM_SIG" sim_xsim "$@"
 run janushdl-modes  "$JANUS_MODES" "$JANUS_MODES_SIG" sim_janushdl RULES_RUNS= "$@"
