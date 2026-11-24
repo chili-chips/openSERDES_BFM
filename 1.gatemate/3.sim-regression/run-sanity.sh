@@ -31,7 +31,7 @@ run() {  # name, known issue ("" if none), its log signature, make target and va
     printf '%-16s %4d s  %-72s %s  (%s)\n' "$n" $((SECONDS - t0)) "$*" "$st" "$r"
 }
 
-JANUS_MODES="openSERDES_BFM #7" JANUS_MODES_SIG="tb_modes.sv:361"
+JANUS_MODES="" JANUS_MODES_SIG=""
 JANUS_RULES="" JANUS_RULES_SIG=""
 XSIM_K="openSERDES_BFM #9" XSIM_SIG="FATAL_ERROR"
 

@@ -29,9 +29,9 @@ It was developed in [openCologne](https://github.com/chili-chips/openCologne) (7
 | `make sim_modes` | Verilator 5.055 | 38 `tb_modes`, 9 mode comparisons, 6 `tb_rules` | PASS, 561 s (16 builds; one run 0.04 s) |
 | `make sim_icarus` | Icarus 14.0 (devel) | 15 `tb_modes`, 6 `tb_rules` | PASS, 33 s |
 | `make sim_xsim` | Vivado XSIM 2026.2 | 3 `tb_modes`, 6 `tb_rules` | `tb_modes` PASS; `tb_rules` no: a known XSIM issue (#9) |
-| `make sim_janushdl` | JanusHDL 0.21.0 | 3 `tb_modes`, 6 `tb_rules` | `tb_rules` PASS; `tb_modes` no: a known JanusHDL issue |
+| `make sim_janushdl` | JanusHDL 0.22.0 | 3 `tb_modes`, 6 `tb_rules` | PASS, 126 s |
 | `make formal` | Yosys 0.70 + Icarus | 5 SAT proofs, 1 exhaustive | PASS, 6 of 6, 19 s |
-| `make sanity` | all of the above | a few runs of each | PASS, about 2 minutes (JanusHDL as known) |
+| `make sanity` | all of the above | a few runs of each | PASS, about 2 minutes |
 | `make regression` | all of the above | each target in full | PASS, about 12 minutes (JanusHDL as known) |
 
 | File | Content |
