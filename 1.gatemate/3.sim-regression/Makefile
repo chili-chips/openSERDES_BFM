@@ -117,7 +117,10 @@ sim_rules: | $(VW) $(LOGS)
 	  $(RULES_VLT) -GDP=$$dp -GSLIDE=$$sl -Mdir $$o +define+CDR_MODEL=$$m $(BFM) tb_rules.sv > /dev/null; \
 	  $$o/Vtb_rules | $(RULES_GREP) | sed "s/^TB_RULES: DP/TB_RULES: $$m, DP/" | tee -a $(LOGS)/sim_rules.log; \
 	done
-	@test $$(grep -c "^TB_RULES: .*: PASS$$" $(LOGS)/sim_rules.log) -eq $(words $(RULES_RUNS))
+	@# a PHY that applies RX_POLARITY_I late (+serdes_rx_pol_lat): 64 bits, FAST
+	@$(VW)/rules_3_0_FAST/Vtb_rules +serdes_rx_pol_lat=16 | $(RULES_GREP) \
+	  | sed "s/^TB_RULES: DP/TB_RULES: FAST, polarity 16 words late, DP/" | tee -a $(LOGS)/sim_rules.log
+	@test $$(grep -c "^TB_RULES: .*: PASS$$" $(LOGS)/sim_rules.log) -eq $$(( $(words $(RULES_RUNS)) + 1 ))
 
 # Two BFMs across a frequency offset (tb_ppm), Verilator, ACCURATE, clock
 # correction off: on B's recovered clock every byte must arrive at +300,

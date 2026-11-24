@@ -100,10 +100,11 @@ Every SerDes setting is a parameter, with its name and default. The model's own 
 | `BHV_CDR_KP` | `0.125` | package | `ACCURATE`: CDR loop gain |
 | `BHV_CDR_LOCK_EDGES` | `32` | package | Line edges to CDR lock |
 | `BHV_RX_PIPE_STAGES` | `3` | package | RX output delay, in clocks |
+| `+serdes_rx_pol_lat=N` | `0` | plusarg (run time) | `RX_POLARITY_I` acts `N` RX words late, as a PHY that applies the inversion late: to test a MAC's polarity detection against it. `0`: at once (DS1001 gives no latency). `tb_rules` checks it (`make sim_rules`, `N` = 16) |
 | `BHV_VERBOSE` | `0` | package | Debug prints |
 | `SERDES_ENABLE_DEFAULT`, `SERDES_AUTO_INIT_DEFAULT` | `0`, `0` | package | Defaults of `SERDES_ENABLE` and `SERDES_AUTO_INIT`, the two parameters the vendor model lacks: `CC_SERDES`'s reset value of `0x5C`, so a design can start the BFM as it starts the chip. `0` as the vendor model: the SerDes starts off |
 
-Defines: `+define+CDR_MODEL=FAST` in Verilator, `-DCDR_MODEL=FAST` in Icarus. Edit the others in [`1.model/ccfpga_serdes_pkg.sv`](1.model/ccfpga_serdes_pkg.sv).
+Defines: `+define+CDR_MODEL=FAST` in Verilator, `-DCDR_MODEL=FAST` in Icarus. Plusargs on the run line. Edit the others in [`1.model/ccfpga_serdes_pkg.sv`](1.model/ccfpga_serdes_pkg.sv).
 
 ## Three levels of line and receiver: `CDR_MODEL`
 
@@ -218,7 +219,7 @@ DS1001 (Tables 2.56, 2.57) gives the rule: below `RX_CLKCOR_MIN_LAT` the buffer 
 | Remove | Occupancy above `MAX_LAT`: of two matching words in a row, the second is not written. |
 | Insert | Occupancy below `MIN_LAT` - 1: the read stalls on a matching word, and the output repeats the word **before** it. |
 | Off (`RX_CLKCOR_USE = 0`) | Phase only, limits fixed at 4 and 60. |
-| Error | `RX_BUF_ERR_O` for occupancy below 3 or above 60, until `RX_BUF_RESET_I`. |
+| Error | `RX_BUF_ERR_O` for occupancy below 3 or above 60, until `RX_BUF_RESET_I`. The model also prints it once, overflow or underflow, so a design that leaves the flag open still shows the slip. |
 
 If the silicon works the same, three things follow for a protocol:
 
@@ -226,7 +227,7 @@ If the silicon works the same, three things follow for a protocol:
 2. An insertion repeats the previous word. It is safe only when that word is harmless to repeat: another sequence word, or idle.
 3. The sequence must sit aligned in the datapath word.
 
-PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_CLKCOR_USE = 0` and run from the host's REFCLK. Silicon agrees: the hard clock correction cannot handle PCIe SKP (Intergalaktik, pci_eerie on GateMate A1, 2026-11-20). Where the host's REFCLK is not available (separate reference clocks, SRNS), the RX data goes on the recovered clock and the SKP clock compensation into the fabric: an elastic buffer that adds or drops SKP symbols ([across a frequency offset](#verification)). How openCologne's 7.SerDes uses clock correction, and the PCIe details: [clock correction](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/0.doc/clock-correction.md).
+PCIe's SKP ordered set meets none of these, so a PCIe endpoint should keep `RX_CLKCOR_USE = 0` and run from the host's REFCLK. Where the host's REFCLK is not available (separate reference clocks, SRNS), the RX data goes on the recovered clock and the SKP clock compensation into the fabric: an elastic buffer that adds or drops SKP symbols ([across a frequency offset](#verification)). How openCologne's 7.SerDes uses clock correction, and the PCIe details: [clock correction](https://github.com/chili-chips/openCologne/blob/main/7.SerDes/0.doc/clock-correction.md).
 
 ### Implementation
 

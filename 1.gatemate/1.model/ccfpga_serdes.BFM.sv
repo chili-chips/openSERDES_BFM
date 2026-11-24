@@ -1847,6 +1847,39 @@ module ccfpga_serdes
   endtask
 
   //-------------------------------------------------------------------------
+  // RX polarity: RX_POLARITY_I acts on the line at once (DS1001 gives no
+  // latency), or rx_pol_lat RX words later (+serdes_rx_pol_lat=N, run time,
+  // every instance): a PHY that applies the inversion late, to test a MAC's
+  // polarity detection against it. Counted in the deserializer's words
+  // (rx_word_done, a word into rx_word_q), the same for every CDR_MODEL
+  //-------------------------------------------------------------------------
+  int   rx_pol_lat = 0;
+  bit   rx_pol_d[$];         // RX_POLARITY_I, one entry a word
+  bit   rx_pol_late = LO;
+  logic rx_pol_eff;          // what the samplers apply
+
+  initial begin : rx_pol_cfg
+    void'($value$plusargs("serdes_rx_pol_lat=%d", rx_pol_lat));
+    if (rx_pol_lat < 0) begin
+      rx_pol_lat = 0;
+    end
+    if (rx_pol_lat > 0) begin
+      $display("%m: RX_POLARITY_I applies %0d RX words late (+serdes_rx_pol_lat)", rx_pol_lat);
+    end
+  end : rx_pol_cfg
+
+  always @(rx_word_done) begin : rx_pol_delay
+    if (rx_pol_lat > 0) begin
+      rx_pol_d.push_back(rx_polarity_i);
+      if (rx_pol_d.size() > rx_pol_lat) begin
+        rx_pol_late = rx_pol_d.pop_front();
+      end
+    end
+  end : rx_pol_delay
+
+  assign rx_pol_eff = (rx_pol_lat == 0) ? rx_polarity_i : rx_pol_late;
+
+  //-------------------------------------------------------------------------
   // CDR_MODEL = ACCURATE: a sampler every UI, steered by a CDR loop
   //-------------------------------------------------------------------------
   always @(rx_pad_p) begin : rx_cdr_phase_detector
@@ -1896,7 +1929,7 @@ module ccfpga_serdes
         #(step * 1ns);
         rx_last_sample_t = now_ns();
         rx_bit_t         = now_ns();
-        rx_bit_in(rx_pad_p ^ rx_polarity_i);
+        rx_bit_in(rx_pad_p ^ rx_pol_eff);
       end
       else begin
         rx_stop();
@@ -1930,7 +1963,7 @@ module ccfpga_serdes
     n         = int'($ceil(rx_fast_x - 0.5));
     for (int i = rx_fast_grid_n; i < n; i++) begin
       rx_bit_t = rx_fast_grid_t + (i + 0.5) * ui;
-      rx_bit_in(rx_fast_level ^ rx_polarity_i);
+      rx_bit_in(rx_fast_level ^ rx_pol_eff);
     end
     rx_fast_grid_n = n;
   endtask
@@ -2104,7 +2137,7 @@ module ccfpga_serdes
              cdr_none_bytes[p], RX_BYTES);
     end
     if (cdr_none_words[p] > 0) begin
-      rx_none_w       = cdr_none_last[p] ^ {80{rx_polarity_i}};
+      rx_none_w       = cdr_none_last[p] ^ {80{rx_pol_eff}};
       rx_none_open    = TRUE;
       rx_cdr_locked_r = HI;  // no CDR: locked with the first word
       rx_bit_t        = rx_none_word_t + (pos + 0.5) * ui;
@@ -2557,6 +2590,12 @@ module ccfpga_serdes
       end
       else begin
         if ((eb_r_occ > 6'd60) || (eb_r_occ < 6'd3 && !eb_r_bypass) || eb_r_full2 || eb_w_ovf) begin
+          // once, as RX_BUF_ERR_O rises (it holds until RX_BUF_RESET_I): a
+          // design that leaves the flag open still sees the slip in the log
+          if (!eb_r_err) begin
+            $display("[%0t] %m: RX elastic buffer %s, %0d words (RX_BUF_ERR_O)", $time,
+                     (eb_r_occ < 6'd3 && !eb_r_bypass) ? "underflow" : "overflow", eb_r_occ);
+          end
           eb_r_err = HI;
         end
         eb_r_word  = dp_keep(eb_r_word, eb_r_d, RX_DATAPATH_SEL);

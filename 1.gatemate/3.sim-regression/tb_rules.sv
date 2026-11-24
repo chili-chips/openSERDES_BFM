@@ -52,6 +52,7 @@ module tb_rules #(
   logic prbs_cnt_rst = 1'b0;
   logic ei_det = 1'b0, comma_en = 1'b1, slide = 1'b0, mcomma = 1'b1, pcomma = 1'b1;
   logic rx_8en = 1'b1;
+  logic rx_pol = 1'b0;
   logic we = 1'b0, en = 1'b0;
   logic [7:0] addr = '0;
   logic [15:0] di = '0, mask = 16'hFFFF;
@@ -212,7 +213,7 @@ module tb_rules #(
       .rx_en_ei_detector_i  (ei_det),
       .rx_comma_detect_en_i (comma_en),
       .rx_slide_i           (slide),
-      .rx_polarity_i        (1'b0),
+      .rx_polarity_i        (rx_pol),
       .rx_8b10b_en_i        (rx_8en),
       .rx_8b10b_bypass_i    ('0),
       .rx_mcomma_align_i    (mcomma),
@@ -763,6 +764,42 @@ module tb_rules #(
     wait_aligned(30000.0);
   endtask
 
+  // RX_POLARITY_I: an inverted line still decodes, mostly to the same data
+  // (an RD+ code is the inverse of the RD- one), but D10.2 comes out as
+  // D21.5, as a PCIe TS1 identifier shows it (4.2.4.4). TX: K28.5 in lane
+  // 0 (alignment holds), D10.2 elsewhere. DS1001 gives no latency: at the
+  // line, then through the RX path (up to POL_PIPE words); with
+  // +serdes_rx_pol_lat=N (a PHY that applies it late), N words more. Then
+  // back, and aligned again
+  localparam int POL_PIPE = 20;  // words: the line, deserializer, RX buffer, decoder (13 here)
+
+  task rules_polarity();
+    int pol_lat, seen;
+    pol_lat = 0;
+    void'($value$plusargs("serdes_rx_pol_lat=%d", pol_lat));
+    txd_c   = {{7{8'h4A}}, 8'hBC};
+    txk_c   = 8'h01;
+    tx_mode = 1;
+    #2000ns;
+    wait_aligned(30000.0);
+    @(posedge clk_pll);
+    rx_pol = 1'b1;
+    seen   = -1;  // words after the flip to the first D21.5
+    for (int w = 0; w < pol_lat + 2 * POL_PIPE; w++) begin
+      @(posedge clk_pll);
+      if (rxd[15:8] === 8'hB5) begin
+        seen = w;
+        break;
+      end
+    end
+    rule($sformatf("RX_POLARITY_I: acts %0d to %0d words later", pol_lat, pol_lat + POL_PIPE),
+         (seen >= pol_lat) && (seen <= pol_lat + POL_PIPE), $sformatf("%0d words", seen));
+    rx_pol  = 1'b0;
+    tx_mode = 0;
+    #2000ns;
+    wait_aligned(30000.0);
+  endtask
+
   task rules_misc();
     // RX_CLK_O: high for half a symbol at most
     begin
@@ -958,6 +995,7 @@ module tb_rules #(
       rules_tx();
       rules_align();
       rules_prbs();
+      rules_polarity();
       rules_misc();
     end else if (SLIDE != 0) begin
       wait (rxdone === 1'b1);

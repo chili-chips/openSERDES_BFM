@@ -139,7 +139,7 @@ Used by [openCologne](https://github.com/chili-chips/openCologne) (`7.SerDes/1.o
 
 #### License
 
-BSD-3-Clause (`REUSE.toml`, `LICENSES/`; `reuse lint` passes). The logos in `0.doc/artwork/`, except our own, belong to their owners and are shown for acknowledgment only (`LicenseRef-Third-Party-Document`).
+BSD-3-Clause (`REUSE.toml`, `LICENSES/`; `reuse lint` passes), but for [`ccfpga_serdes.SYNTH.sv`](1.gatemate/1.model/ccfpga_serdes.SYNTH.sv): 0BSD. It is synthesized into every bitstream that uses it, and 0BSD needs no notice with a bitstream. The logos in `0.doc/artwork/`, except our own, belong to their owners and are shown for acknowledgment only (`LicenseRef-Third-Party-Document`).
 
 CologneChip's datasheets (DS1001 and others) and their simulation model are not open-licensed and are not in this repository. Get them from [CologneChip](https://colognechip.com/programmable-logic/gatemate/).
 
